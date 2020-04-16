@@ -25,7 +25,7 @@ func BuildConfig(kubeConfig KubeConfig) (*rest.Config, error) {
 	return config, err
 }
 
-func GetClientSet(kubeConfig KubeConfig) (*kubernetes.Clientset, error) {
+func GetClientset(kubeConfig KubeConfig) (*kubernetes.Clientset, error) {
 	config, err := BuildConfig(kubeConfig)
 	if err != nil {
 		return nil, err
@@ -53,8 +53,8 @@ func SearchNamespaces(clientset *kubernetes.Clientset) ([]v1.Namespace, error) {
 	return namespaceList.Items, nil
 }
 
-func SearchPods(clientset *kubernetes.Clientset, namespace v1.Namespace) ([]v1.Pod, error) {
-	podList, err := clientset.CoreV1().Pods(namespace.GetName()).List(metav1.ListOptions{})
+func SearchPods(clientset *kubernetes.Clientset, namespace string) ([]v1.Pod, error) {
+	podList, err := clientset.CoreV1().Pods(namespace).List(metav1.ListOptions{})
 	if err != nil {
 		return nil, err
 	}
@@ -65,8 +65,8 @@ func SearchPods(clientset *kubernetes.Clientset, namespace v1.Namespace) ([]v1.P
 	return podList.Items, nil
 }
 
-func SearchServices(clientset *kubernetes.Clientset, namespace v1.Namespace) ([]v1.Service, error) {
-	serviceList, err := clientset.CoreV1().Services(namespace.GetName()).List(metav1.ListOptions{})
+func SearchServices(clientset *kubernetes.Clientset, namespace string) ([]v1.Service, error) {
+	serviceList, err := clientset.CoreV1().Services(namespace).List(metav1.ListOptions{})
 	if err != nil {
 		return nil, err
 	}
@@ -82,7 +82,7 @@ func GetContainers(clientset *kubernetes.Clientset, namespace string, podName st
 	if err != nil {
 		return nil, err
 	}
-	fmt.Println("Services: ")
+	fmt.Println("Containers: ")
 	for _, container := range pod.Spec.Containers {
 		fmt.Println("\t", container.Name)
 	}
@@ -90,16 +90,20 @@ func GetContainers(clientset *kubernetes.Clientset, namespace string, podName st
 }
 
 func GetContainerLogs(clientset *kubernetes.Clientset, namespace string, podName string, containerName string, out io.Writer) error {
-	tailLines := int64(50)
+	tailLines := int64(100)
 	podLogOptions := v1.PodLogOptions{
-		Container:                    containerName,
-		TailLines:                    &tailLines,
+		Container: containerName,
+		TailLines: &tailLines,
 	}
+
+	fmt.Println("Logs: ")
 
 	logRequest := clientset.CoreV1().Pods(namespace).GetLogs(podName, &podLogOptions)
 
 	readCloser, err := logRequest.Stream()
-	defer readCloser.Close()
+	if readCloser != nil {
+		defer readCloser.Close()
+	}
 	if err != nil {
 		return err
 	}
