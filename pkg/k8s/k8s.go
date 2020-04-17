@@ -46,10 +46,10 @@ func SearchNamespaces(clientset *kubernetes.Clientset) ([]v1.Namespace, error) {
 	if err != nil {
 		return nil, err
 	}
-	fmt.Println("Namespaces: ")
-	for _, pod := range namespaceList.Items {
-		fmt.Println("\t", pod.GetName())
-	}
+	// fmt.Println("Namespaces: ")
+	// for _, pod := range namespaceList.Items {
+	// 	fmt.Println("\t", pod.GetName())
+	// }
 	return namespaceList.Items, nil
 }
 
@@ -58,10 +58,10 @@ func SearchPods(clientset *kubernetes.Clientset, namespace string) ([]v1.Pod, er
 	if err != nil {
 		return nil, err
 	}
-	fmt.Println("Pods: ")
-	for _, pod := range podList.Items {
-		fmt.Println("\t", pod.GetName())
-	}
+	// fmt.Println("Pods: ")
+	// for _, pod := range podList.Items {
+	// 	fmt.Println("\t", pod.GetName())
+	// }
 	return podList.Items, nil
 }
 
@@ -70,10 +70,11 @@ func SearchServices(clientset *kubernetes.Clientset, namespace string) ([]v1.Ser
 	if err != nil {
 		return nil, err
 	}
-	fmt.Println("Services: ")
-	for _, service := range serviceList.Items {
-		fmt.Println("\t", service.GetName())
-	}
+	// fmt.Println("Services: ")
+	// for _, service := range serviceList.Items {
+	// 	fmt.Println("\t", service.GetName())
+	// }
+
 	return serviceList.Items, nil
 }
 

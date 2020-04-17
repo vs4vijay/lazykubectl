@@ -53,4 +53,27 @@
     https://github.com/alitari/kubexp
 
     https://github.com/JulienBreux/pody
+
+
+
+	if v, err := g.SetView("help", maxX-25, 0, maxX-1, 9); err != nil {
+		if err != gocui.ErrUnknownView {
+			return err
+		}
+		fmt.Fprintln(v, "KEYBINDINGS")
+		fmt.Fprintln(v, "Space: New View")
+		fmt.Fprintln(v, "Tab: Next View")
+		fmt.Fprintln(v, "← ↑ → ↓: Move View")
+		fmt.Fprintln(v, "Backspace: Delete View")
+		fmt.Fprintln(v, "t: Set view on top")
+		fmt.Fprintln(v, "b: Set view on bottom")
+		fmt.Fprintln(v, "^C: Exit")
+	}
+
+
+    CPU
+    MEM
+    View Logs
+    Execute Shell
+    ? Events
 ```
