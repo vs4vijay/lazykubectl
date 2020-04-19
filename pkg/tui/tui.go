@@ -169,7 +169,7 @@ func onSelectNamespace(g *gocui.Gui, v *gocui.View) error {
 		podsView, _ := g.View("Main")
 		podsView.Clear()
 
-		pods, _ := app.kubeapi.SearchPods(namespaceName)
+		pods, _ := app.kubeapi.GetPods(namespaceName)
 		podsView.Title = fmt.Sprintf("Pods(%v) - %v", len(pods), namespaceName)
 		fmt.Fprintf(podsView, "%-20s %-15s\n", "POD NAME", "POD STATUS")
 		for _, item := range pods {
@@ -179,7 +179,7 @@ func onSelectNamespace(g *gocui.Gui, v *gocui.View) error {
 		servicesView, _ := g.View("Services")
 		servicesView.Clear()
 
-		services, _ := app.kubeapi.SearchServices(namespaceName)
+		services, _ := app.kubeapi.GetServices(namespaceName)
 		servicesView.Title = fmt.Sprintf("Services(%s)", namespaceName)
 		for _, item := range services {
 			fmt.Fprintln(servicesView, item.GetName())

@@ -42,8 +42,6 @@ var rootCmd = &cobra.Command{
 			return err
 		}
 
-		fmt.Println("kubeapi", kubeapi)
-
 		app, err := tui.NewApp(kubeapi)
 		if err != nil {
 			return err

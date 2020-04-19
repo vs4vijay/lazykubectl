@@ -62,31 +62,6 @@ func BuildConfig(kubeConfig KubeConfig) (*rest.Config, error) {
 	return config, err
 }
 
-func GetClientset(kubeConfig KubeConfig) (*kubernetes.Clientset, error) {
-	config, err := BuildConfig(kubeConfig)
-	if err != nil {
-		return nil, err
-	}
-
-	clientset, err := kubernetes.NewForConfig(config)
-	if err != nil {
-		return nil, err
-	}
-
-	// api := clientset.CoreV1()
-	// c, _ :=clientcmd.DefaultClientConfig.ClientConfig()
-
-	// clientcmd.DirectClientConfig
-
-	// clientcmd.DirectClientConfig{}
-
-	// rawConfig, _ := clientcmd.DirectClientConfig.RawConfig()
-	// // rawConfig.
-	// fmt.Println("rawConfig", rawConfig)
-
-	return clientset, nil
-}
-
 // func (kubeapi *KubeAPI) SearchNamespaces() ([]v1.Namespace, error) {
 // 	namespaceList, err := kubeapi.Clientset.CoreV1().Namespaces().List(metav1.ListOptions{})
 // 	if err != nil {
@@ -99,7 +74,7 @@ func GetClientset(kubeConfig KubeConfig) (*kubernetes.Clientset, error) {
 // 	return namespaceList.Items, nil
 // }
 
-func (kubeapi *KubeAPI) SearchNodes() ([]v1.Node, error) {
+func (kubeapi *KubeAPI) GetNodes() ([]v1.Node, error) {
 	nodeList, err := kubeapi.Clientset.CoreV1().Nodes().List(metav1.ListOptions{})
 	if err != nil {
 		return nil, err
@@ -121,7 +96,7 @@ func (kubeapi *KubeAPI) SearchNodes() ([]v1.Node, error) {
 	return nodeList.Items, nil
 }
 
-func (kubeapi *KubeAPI) SearchPods(namespace string) ([]v1.Pod, error) {
+func (kubeapi *KubeAPI) GetPods(namespace string) ([]v1.Pod, error) {
 	podList, err := kubeapi.Clientset.CoreV1().Pods(namespace).List(metav1.ListOptions{})
 	if err != nil {
 		return nil, err
@@ -133,7 +108,7 @@ func (kubeapi *KubeAPI) SearchPods(namespace string) ([]v1.Pod, error) {
 	return podList.Items, nil
 }
 
-func (kubeapi *KubeAPI) SearchServices(namespace string) ([]v1.Service, error) {
+func (kubeapi *KubeAPI) GetServices(namespace string) ([]v1.Service, error) {
 	serviceList, err := kubeapi.Clientset.CoreV1().Services(namespace).List(metav1.ListOptions{})
 	if err != nil {
 		return nil, err
@@ -179,7 +154,7 @@ func (kubeapi *KubeAPI) GetContainerLogs(namespace string, podName string, conta
 	return err
 }
 
-func (kubeapi *KubeAPI) SearchDeployments(namespace v1.Namespace) ([]v1beta1.Deployment, error) {
+func (kubeapi *KubeAPI) GetDeployments(namespace v1.Namespace) ([]v1beta1.Deployment, error) {
 	deploymentList, err := kubeapi.Clientset.ExtensionsV1beta1().Deployments(namespace.GetName()).List(metav1.ListOptions{})
 	// AppsV1().Deployments(namespace).List(metav1.ListOptions{})
 	if err != nil {
