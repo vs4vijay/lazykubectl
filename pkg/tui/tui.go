@@ -116,7 +116,6 @@ func layout(g *gocui.Gui) error {
 		v.Highlight = true
 		v.SelBgColor = gocui.ColorGreen
 		v.SelFgColor = gocui.ColorBlack
-		// v.Autoscroll = true
 	}
 
 	if v, err := g.SetView("Services", 0, gridY*2, gridX*4, gridY*3); err != nil {
@@ -132,6 +131,7 @@ func layout(g *gocui.Gui) error {
 }
 
 func quit(g *gocui.Gui, v *gocui.View) error {
+	fmt.Printf("%+v", state)
 	return gocui.ErrQuit
 }
 
@@ -197,7 +197,7 @@ func onSelectMain(g *gocui.Gui, view *gocui.View) error {
 	selectedData = strings.Fields(selectedData)[0]
 
 	if strings.HasPrefix(view.Title, "Pods") {
-		// Handling for Pods View
+		// Building Containers View
 		state["pod"] = selectedData
 
 		g.Update(func(g *gocui.Gui) error {
@@ -213,17 +213,19 @@ func onSelectMain(g *gocui.Gui, view *gocui.View) error {
 			return nil
 		})
 	} else if strings.HasPrefix(view.Title, "Containers") {
-		// Handling for Pods View
+		// Building Logs View
 		state["container"] = selectedData
 
 		g.Update(func(g *gocui.Gui) error {
 			view.Clear()
 			view.Title = fmt.Sprintf("Logs - %v", state["container"])
 			view.Highlight = false
+			view.Autoscroll = true
 			// view.Editable = true
 			// view.Wrap = true
 			// view.FgColor = gocui.ColorWhite
 			// view.SelBgColor = gocui.ColorBlue
+
 
 			app.kubeapi.GetContainerLogs(state["namespace"], state["pod"], state["container"], view)
 			return nil
