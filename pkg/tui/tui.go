@@ -3,22 +3,32 @@ package tui
 import (
 	"fmt"
 	"log"
-	"os"
+	"strings"
 
 	"github.com/jroimartin/gocui"
-	"k8s.io/client-go/kubernetes"
-
 	"github.com/vs4vijay/lazykubectl/pkg/k8s"
 )
 
 var (
-	viewArr   = []string{"Info", "Namespaces", "Pods", "Services"}
-	active    = 0
-	clientset *kubernetes.Clientset
+	app     *App
+	viewArr = []string{"Info", "Namespaces", "Main", "Services"}
+	active  = 0
+	state   = map[string]string{}
 )
 
-func Start(kubeConfig k8s.KubeConfig) {
-	clientset, _ = k8s.GetClientset(kubeConfig)
+type App struct {
+	kubeapi *k8s.KubeAPI
+}
+
+func NewApp(kubeapi *k8s.KubeAPI) (*App, error) {
+	app = &App{
+		kubeapi: kubeapi,
+	}
+	return app, nil
+}
+
+func (app *App) Start() {
+	// app.kubeapi.Clientset, _ = k8s.Getapp.kubeapi.Clientset(kubeConfig)
 
 	g, err := gocui.NewGui(gocui.Output256)
 	if err != nil {
@@ -35,21 +45,28 @@ func Start(kubeConfig k8s.KubeConfig) {
 
 	g.SetManagerFunc(layout)
 
-	// g.SetCurrentView("Info")
-
 	if err := g.SetKeybinding("", gocui.KeyCtrlC, gocui.ModNone, quit); err != nil {
 		log.Panicln(err)
 	}
 
+	// Rotating Views
 	if err := g.SetKeybinding("", gocui.KeyTab, gocui.ModNone, nextView); err != nil {
 		log.Panicln(err)
 	}
-
-	if err := g.SetKeybinding("", gocui.MouseLeft, gocui.ModNone, selectWidgets); err != nil {
+	if err := g.SetKeybinding("", gocui.KeyArrowRight, gocui.ModNone, nextView); err != nil {
 		log.Panicln(err)
 	}
 
-	if err := g.SetKeybinding("Namespaces", gocui.MouseLeft, gocui.ModNone, selectNamespace); err != nil {
+	// Select Panel
+	if err := g.SetKeybinding("", gocui.MouseLeft, gocui.ModNone, selectPanel); err != nil {
+		log.Panicln(err)
+	}
+
+	if err := g.SetKeybinding("Namespaces", gocui.MouseLeft, gocui.ModNone, onSelectNamespace); err != nil {
+		log.Panicln(err)
+	}
+
+	if err := g.SetKeybinding("Main", gocui.KeyEnter, gocui.ModNone, onSelectMain); err != nil {
 		log.Panicln(err)
 	}
 
@@ -86,21 +103,25 @@ func layout(g *gocui.Gui) error {
 		v.Highlight = true
 		v.SelBgColor = gocui.ColorGreen
 		v.SelFgColor = gocui.ColorBlack
-		namespaces, _ := k8s.SearchNamespaces(clientset)
+
+		namespaces, _ := app.kubeapi.SearchNamespaces()
 		for _, item := range namespaces {
 			fmt.Fprintln(v, item.GetName())
 		}
 	}
 
-	if v, err := g.SetView("Pods", gridX, 0, (gridX*4), (gridY*2)-pad); err != nil {
+	if v, err := g.SetView("Main", gridX, 0, gridX*4, (gridY*2)-pad); err != nil {
 		if err != gocui.ErrUnknownView {
 			return err
 		}
 		v.Title = "Pods"
+		v.Highlight = true
+		v.SelBgColor = gocui.ColorGreen
+		v.SelFgColor = gocui.ColorBlack
 		// v.Autoscroll = true
 	}
 
-	if v, err := g.SetView("Services", 0, gridY*2, (gridX*4), gridY*3); err != nil {
+	if v, err := g.SetView("Services", 0, gridY*2, gridX*4, gridY*3); err != nil {
 		if err != gocui.ErrUnknownView {
 			return err
 		}
@@ -124,7 +145,6 @@ func setCurrentViewOnTop(g *gocui.Gui, name string) (*gocui.View, error) {
 }
 
 func nextView(g *gocui.Gui, v *gocui.View) error {
-	// TODO: Try to use g.View()
 	nextIndex := (active + 1) % len(viewArr)
 	name := viewArr[nextIndex]
 
@@ -136,34 +156,81 @@ func nextView(g *gocui.Gui, v *gocui.View) error {
 	return nil
 }
 
-func selectWidgets(g *gocui.Gui, v *gocui.View) error {
+func selectPanel(g *gocui.Gui, v *gocui.View) error {
 	_, err := g.SetCurrentView(v.Name())
 	return err
 }
 
-func selectNamespace(g *gocui.Gui, v *gocui.View) error {
+func onSelectNamespace(g *gocui.Gui, v *gocui.View) error {
 	namespaceName := getSelectedText(v)
+	state["namespace"] = namespaceName
 
 	g.Update(func(g *gocui.Gui) error {
-		podsView, _ := g.View("Pods")
+		podsView, _ := g.View("Main")
 		podsView.Clear()
 
-		pods, _ := k8s.SearchPods(clientset, namespaceName)
+		pods, _ := app.kubeapi.SearchPods(namespaceName)
+		podsView.Title = fmt.Sprintf("Pods(%v) - %v", len(pods), namespaceName)
+		fmt.Fprintf(podsView, "%-20s %-15s\n", "POD NAME", "POD STATUS")
 		for _, item := range pods {
-			podsView.Title = fmt.Sprintf("Pods(%s)", namespaceName)
-			fmt.Fprintln(podsView, item.GetName())
+			fmt.Fprintf(podsView, "%-20s %-15s\n", item.GetName(), item.Status.Phase)
 		}
 
 		servicesView, _ := g.View("Services")
 		servicesView.Clear()
 
-		services, _ := k8s.SearchServices(clientset, namespaceName)
+		services, _ := app.kubeapi.SearchServices(namespaceName)
+		servicesView.Title = fmt.Sprintf("Services(%s)", namespaceName)
 		for _, item := range services {
-			servicesView.Title = fmt.Sprintf("Services(%s)", namespaceName)
 			fmt.Fprintln(servicesView, item.GetName())
 		}
 		return nil
 	})
+
+	return nil
+}
+
+func onSelectMain(g *gocui.Gui, view *gocui.View) error {
+	selectedData := getSelectedText(view)
+
+	if selectedData == "" {
+		return nil
+	}
+	selectedData = strings.Fields(selectedData)[0]
+
+	if strings.HasPrefix(view.Title, "Pods") {
+		// Handling for Pods View
+		state["pod"] = selectedData
+
+		g.Update(func(g *gocui.Gui) error {
+			view.Clear()
+			view.SelBgColor = gocui.ColorBlue
+
+			containers, _ := app.kubeapi.GetContainers(state["namespace"], state["pod"])
+			fmt.Fprintf(view, "%-20s\n", "CONTAINER NAME")
+			view.Title = fmt.Sprintf("Containers(%v) - %v", len(containers), state["pod"])
+			for _, item := range containers {
+				fmt.Fprintf(view, "%-20s\n", item.Name)
+			}
+			return nil
+		})
+	} else if strings.HasPrefix(view.Title, "Containers") {
+		// Handling for Pods View
+		state["container"] = selectedData
+
+		g.Update(func(g *gocui.Gui) error {
+			view.Clear()
+			view.Title = fmt.Sprintf("Logs - %v", state["container"])
+			view.Highlight = false
+			// view.Editable = true
+			// view.Wrap = true
+			// view.FgColor = gocui.ColorWhite
+			// view.SelBgColor = gocui.ColorBlue
+
+			app.kubeapi.GetContainerLogs(state["namespace"], state["pod"], state["container"], view)
+			return nil
+		})
+	}
 
 	return nil
 }
@@ -175,31 +242,4 @@ func getSelectedText(view *gocui.View) string {
 		return ""
 	}
 	return line
-}
-
-// func renderList(list []interface{}, ) error {
-// 	for _, item := range list {
-// 		item.()
-// 	}
-// }
-
-func Try(kubeConfig k8s.KubeConfig) {
-	fmt.Println("Rendering")
-	// fmt.Println("kubeConfig", kubeConfig)
-
-	clientset, _ := k8s.GetClientset(kubeConfig)
-
-	k8s.SearchNamespaces(clientset)
-
-	k8s.SearchPods(clientset, "kube-system")
-
-	k8s.GetContainers(clientset, "kube-system", "kube-apiserver-kind-control-plane")
-	k8s.GetContainers(clientset, "kube-system", "kube-controller-manager-kind-control-plane")
-	k8s.GetContainers(clientset, "kube-system", "kube-scheduler-kind-control-plane")
-
-	err := k8s.GetContainerLogs(clientset, "kube-system", "kube-apiserver-kind-control-plane", "kube-apiserver", os.Stdout)
-
-	fmt.Println(err)
-
-	// kube-apiserver-kind-control-plane
 }

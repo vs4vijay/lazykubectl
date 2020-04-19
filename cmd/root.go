@@ -23,12 +23,12 @@ var (
 var rootCmd = &cobra.Command{
 	Use:   "lazykubectl",
 	Short: "A Kubernetes Client",
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		fmt.Println("lazykubectl")
 
 		configData, err := ioutil.ReadFile(kubeConfigFile)
 		if err != nil {
-			fmt.Errorf("Error in Reading Config: %v", err)
+			return fmt.Errorf("Error in Reading Config: %v", err)
 			os.Exit(1)
 		}
 
@@ -37,7 +37,22 @@ var rootCmd = &cobra.Command{
 			Manifest: string(configData),
 		}
 
-		tui.Start(kubeConfig)
+		kubeapi, err := k8s.NewKubeAPI(kubeConfig)
+		if err != nil {
+			return err
+		}
+
+		fmt.Println("kubeapi", kubeapi)
+
+		app, err := tui.NewApp(kubeapi)
+		if err != nil {
+			return err
+		}
+
+		app.Start()
+
+		// tui.StartApp(kubeConfig)
+		return nil
 	},
 }
 

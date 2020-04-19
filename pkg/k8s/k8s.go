@@ -1,6 +1,7 @@
 package k8s
 
 import (
+	"errors"
 	"fmt"
 	"io"
 
@@ -11,6 +12,42 @@ import (
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 )
+
+type KubeAPI struct {
+	Clientset *kubernetes.Clientset
+}
+
+func NewKubeAPI(kubeConfig KubeConfig) (*KubeAPI, error) {
+	config, err := BuildConfig(kubeConfig)
+	if err != nil {
+		return nil, err
+	}
+
+	clientset, err := kubernetes.NewForConfig(config)
+	if err != nil {
+		return nil, err
+	}
+
+	kubeapi := &KubeAPI{
+		Clientset: clientset,
+	}
+
+	// HACK: Checking the connectivity of cluster
+	_, err = kubeapi.SearchNamespaces()
+	if err != nil {
+		return nil, errors.New("not able to connect to Kubernetes Cluster")
+	}
+
+	return kubeapi, nil
+}
+
+func (kubeapi *KubeAPI) SearchNamespaces() ([]v1.Namespace, error) {
+	namespaceList, err := kubeapi.Clientset.CoreV1().Namespaces().List(metav1.ListOptions{})
+	if err != nil {
+		return nil, err
+	}
+	return namespaceList.Items, nil
+}
 
 func BuildConfig(kubeConfig KubeConfig) (*rest.Config, error) {
 	var (
@@ -37,24 +74,55 @@ func GetClientset(kubeConfig KubeConfig) (*kubernetes.Clientset, error) {
 	}
 
 	// api := clientset.CoreV1()
+	// c, _ :=clientcmd.DefaultClientConfig.ClientConfig()
+
+	// clientcmd.DirectClientConfig
+
+	// clientcmd.DirectClientConfig{}
+
+	// rawConfig, _ := clientcmd.DirectClientConfig.RawConfig()
+	// // rawConfig.
+	// fmt.Println("rawConfig", rawConfig)
 
 	return clientset, nil
 }
 
-func SearchNamespaces(clientset *kubernetes.Clientset) ([]v1.Namespace, error) {
-	namespaceList, err := clientset.CoreV1().Namespaces().List(metav1.ListOptions{})
+// func (kubeapi *KubeAPI) SearchNamespaces() ([]v1.Namespace, error) {
+// 	namespaceList, err := kubeapi.Clientset.CoreV1().Namespaces().List(metav1.ListOptions{})
+// 	if err != nil {
+// 		return nil, err
+// 	}
+// 	// fmt.Println("Namespaces: ")
+// 	// for _, pod := range namespaceList.Items {
+// 	// 	fmt.Println("\t", pod.GetName())
+// 	// }
+// 	return namespaceList.Items, nil
+// }
+
+func (kubeapi *KubeAPI) SearchNodes() ([]v1.Node, error) {
+	nodeList, err := kubeapi.Clientset.CoreV1().Nodes().List(metav1.ListOptions{})
 	if err != nil {
 		return nil, err
 	}
-	// fmt.Println("Namespaces: ")
-	// for _, pod := range namespaceList.Items {
-	// 	fmt.Println("\t", pod.GetName())
+	// for _, node := range nodeList.Items {
+	// 	fmt.Println("\t", node.GetName())
 	// }
-	return namespaceList.Items, nil
+	// for _, condition := range node.Status.Conditions {
+	// 	if condition.Reason == "KubeletReady" {
+	// 		if condition.Status == "True" {
+	// 			nodeStatus = "Ready"
+	// 		} else if condition.Reason == "False" {
+	// 			nodeStatus = "NotReady"
+	// 		} else {
+	// 			nodeStatus = "Unknown"
+	// 		}
+	// 	}
+	// }
+	return nodeList.Items, nil
 }
 
-func SearchPods(clientset *kubernetes.Clientset, namespace string) ([]v1.Pod, error) {
-	podList, err := clientset.CoreV1().Pods(namespace).List(metav1.ListOptions{})
+func (kubeapi *KubeAPI) SearchPods(namespace string) ([]v1.Pod, error) {
+	podList, err := kubeapi.Clientset.CoreV1().Pods(namespace).List(metav1.ListOptions{})
 	if err != nil {
 		return nil, err
 	}
@@ -65,8 +133,8 @@ func SearchPods(clientset *kubernetes.Clientset, namespace string) ([]v1.Pod, er
 	return podList.Items, nil
 }
 
-func SearchServices(clientset *kubernetes.Clientset, namespace string) ([]v1.Service, error) {
-	serviceList, err := clientset.CoreV1().Services(namespace).List(metav1.ListOptions{})
+func (kubeapi *KubeAPI) SearchServices(namespace string) ([]v1.Service, error) {
+	serviceList, err := kubeapi.Clientset.CoreV1().Services(namespace).List(metav1.ListOptions{})
 	if err != nil {
 		return nil, err
 	}
@@ -74,32 +142,30 @@ func SearchServices(clientset *kubernetes.Clientset, namespace string) ([]v1.Ser
 	// for _, service := range serviceList.Items {
 	// 	fmt.Println("\t", service.GetName())
 	// }
-
 	return serviceList.Items, nil
 }
 
-func GetContainers(clientset *kubernetes.Clientset, namespace string, podName string) ([]v1.Container, error) {
-	pod, err := clientset.CoreV1().Pods(namespace).Get(podName, metav1.GetOptions{})
+func (kubeapi *KubeAPI) GetContainers(namespace string, podName string) ([]v1.Container, error) {
+	pod, err := kubeapi.Clientset.CoreV1().Pods(namespace).Get(podName, metav1.GetOptions{})
 	if err != nil {
 		return nil, err
 	}
-	fmt.Println("Containers: ")
-	for _, container := range pod.Spec.Containers {
-		fmt.Println("\t", container.Name)
-	}
+	// fmt.Println("Containers: ")
+	// for _, container := range pod.Spec.Containers {
+	// 	fmt.Println("\t", container.Name)
+	// }
 	return pod.Spec.Containers, nil
 }
 
-func GetContainerLogs(clientset *kubernetes.Clientset, namespace string, podName string, containerName string, out io.Writer) error {
-	tailLines := int64(100)
+func (kubeapi *KubeAPI) GetContainerLogs(namespace string, podName string, containerName string, out io.Writer) error {
+	// tailLines := int64(100)
 	podLogOptions := v1.PodLogOptions{
 		Container: containerName,
-		TailLines: &tailLines,
+		// TailLines: &tailLines,
 	}
 
-	fmt.Println("Logs: ")
-
-	logRequest := clientset.CoreV1().Pods(namespace).GetLogs(podName, &podLogOptions)
+	// fmt.Println("Logs: ")
+	logRequest := kubeapi.Clientset.CoreV1().Pods(namespace).GetLogs(podName, &podLogOptions)
 
 	readCloser, err := logRequest.Stream()
 	if readCloser != nil {
@@ -113,8 +179,9 @@ func GetContainerLogs(clientset *kubernetes.Clientset, namespace string, podName
 	return err
 }
 
-func SearchDeployments(clientset *kubernetes.Clientset, namespace v1.Namespace) ([]v1beta1.Deployment, error) {
-	deploymentList, err := clientset.ExtensionsV1beta1().Deployments(namespace.GetName()).List(metav1.ListOptions{})
+func (kubeapi *KubeAPI) SearchDeployments(namespace v1.Namespace) ([]v1beta1.Deployment, error) {
+	deploymentList, err := kubeapi.Clientset.ExtensionsV1beta1().Deployments(namespace.GetName()).List(metav1.ListOptions{})
+	// AppsV1().Deployments(namespace).List(metav1.ListOptions{})
 	if err != nil {
 		return nil, err
 	}
