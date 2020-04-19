@@ -28,8 +28,6 @@ func NewApp(kubeapi *k8s.KubeAPI) (*App, error) {
 }
 
 func (app *App) Start() {
-	// app.kubeapi.Clientset, _ = k8s.Getapp.kubeapi.Clientset(kubeConfig)
-
 	g, err := gocui.NewGui(gocui.Output256)
 	if err != nil {
 		log.Panicln(err)
