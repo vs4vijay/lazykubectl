@@ -7,6 +7,7 @@ import (
 
 	"github.com/jroimartin/gocui"
 	"github.com/vs4vijay/lazykubectl/pkg/k8s"
+	v1 "k8s.io/api/core/v1"
 )
 
 var (
@@ -18,6 +19,7 @@ var (
 
 type App struct {
 	kubeapi *k8s.KubeAPI
+	g *gocui.Gui
 }
 
 func NewApp(kubeapi *k8s.KubeAPI) (*App, error) {
@@ -33,6 +35,8 @@ func (app *App) Start() {
 		log.Panicln(err)
 	}
 	defer g.Close()
+
+	app.g = g
 
 	g.InputEsc = true
 	g.Highlight = true
@@ -55,12 +59,21 @@ func (app *App) Start() {
 		log.Panicln(err)
 	}
 
+	// Refresh Views
+	if err := g.SetKeybinding("", 'r', gocui.ModNone, refreshViews); err != nil {
+		log.Panicln(err)
+	}
+
 	// Select Panel
 	if err := g.SetKeybinding("", gocui.MouseLeft, gocui.ModNone, selectPanel); err != nil {
 		log.Panicln(err)
 	}
 
 	if err := g.SetKeybinding("Namespaces", gocui.MouseLeft, gocui.ModNone, onSelectNamespace); err != nil {
+		log.Panicln(err)
+	}
+
+	if err := g.SetKeybinding("Namespaces", 'd', gocui.ModNone, deleteNamespace); err != nil {
 		log.Panicln(err)
 	}
 
@@ -86,10 +99,13 @@ func layout(g *gocui.Gui) error {
 		}
 
 		v.Title = "Info"
-		fmt.Fprintf(v, "Context: %v\n", "")
-		fmt.Fprintf(v, "Cluster: %v\n", "")
-		fmt.Fprintf(v, "User: %v\n", "")
-		fmt.Fprintf(v, "Nodes: %v\n", "")
+
+		info, _ := app.kubeapi.GetInfo()
+		nodes, _ := app.kubeapi.GetNodes()
+		fmt.Fprintf(v, "Cluster: %-10v\n", info["cluster"])
+		fmt.Fprintf(v, "Context: %-10v\n", info["context"])
+		fmt.Fprintf(v, "User: %-10v\n", info["context"])
+		fmt.Fprintf(v, "Nodes: %-10v\n", len(nodes))
 	}
 
 	if v, err := g.SetView("Namespaces", 0, gridY, gridX-pad, (gridY*2)-pad); err != nil {
@@ -102,10 +118,7 @@ func layout(g *gocui.Gui) error {
 		v.SelBgColor = gocui.ColorGreen
 		v.SelFgColor = gocui.ColorBlack
 
-		namespaces, _ := app.kubeapi.GetNamespaces()
-		for _, item := range namespaces {
-			fmt.Fprintln(v, item.GetName())
-		}
+		renderNamespaces(v.Name())
 	}
 
 	if v, err := g.SetView("Main", gridX, 0, gridX*4, (gridY*2)-pad); err != nil {
@@ -127,7 +140,25 @@ func layout(g *gocui.Gui) error {
 		}
 		v.Title = "Services"
 		v.Wrap = true
-		fmt.Fprintf(v, "Services: %v\n", "")
+		v.Autoscroll = true
+
+		// events, _ := app.kubeapi.GetEvents()
+		// for _, item := range events {
+		// 	fmt.Fprintln(v, item.GetName(), item.Message)
+		// }
+
+		eventWatch, err := app.kubeapi.WatchEvents()
+		if err != nil {
+			return err
+		}
+		go func() {
+			for event := range eventWatch.ResultChan() {
+				e, _ := event.Object.(*v1.Event)
+				// fmt.Sprintf("%v : %v \n", e.GetName(), e.Message)
+				renderData(v.Name(), e.Message)
+			}
+		}()
+
 	}
 
 	return nil
@@ -182,14 +213,14 @@ func onSelectNamespace(g *gocui.Gui, v *gocui.View) error {
 			fmt.Fprintf(podsView, "%-20s %-15s\n", item.GetName(), item.Status.Phase)
 		}
 
-		servicesView, _ := g.View("Services")
-		servicesView.Clear()
-
-		services, _ := app.kubeapi.GetServices(namespaceName)
-		servicesView.Title = fmt.Sprintf("Services(%s)", namespaceName)
-		for _, item := range services {
-			fmt.Fprintln(servicesView, item.GetName())
-		}
+		// servicesView, _ := g.View("Services")
+		// servicesView.Clear()
+		//
+		// services, _ := app.kubeapi.GetServices(namespaceName)
+		// servicesView.Title = fmt.Sprintf("Services(%s)", namespaceName)
+		// for _, item := range services {
+		// 	fmt.Fprintln(servicesView, item.GetName())
+		// }
 		return nil
 	})
 
@@ -242,6 +273,30 @@ func onSelectMain(g *gocui.Gui, view *gocui.View) error {
 	return nil
 }
 
+func deleteNamespace(g *gocui.Gui, v *gocui.View) error {
+	namespaceName := getSelectedText(v)
+	err := app.kubeapi.DeleteNamespaces(namespaceName)
+	if err != nil {
+		return err
+	}
+	// renderNamespaces(v.Name())
+	g.Update(func(g *gocui.Gui) error {
+		view, _ := g.View("Namespaces")
+		view.Clear()
+		// view.SetCursor(0, 0 )
+		// view.SetOrigin(0, 0 )
+
+		namespaces, _ := app.kubeapi.GetNamespaces()
+		for _, item := range namespaces {
+			fmt.Fprintln(view, item.GetName())
+		}
+
+		// fmt.Fprintf(view, "data")
+		return nil
+	})
+	return nil
+}
+
 func getSelectedText(view *gocui.View) string {
 	_, cy := view.Cursor()
 	line, err := view.Line(cy)
@@ -249,4 +304,29 @@ func getSelectedText(view *gocui.View) string {
 		return ""
 	}
 	return line
+}
+
+func renderData(viewName string, data string) {
+	app.g.Update(func(g *gocui.Gui) error {
+		view, _ := g.View(viewName)
+		view.Clear()
+		fmt.Fprintf(view, data)
+		return nil
+	})
+}
+
+func renderNamespaces(viewName string)  {
+	namespaces, _ := app.kubeapi.GetNamespaces()
+	var ns []string
+	for _, item := range namespaces {
+		// fmt.Fprintln(v, item.GetName())
+		ns = append(ns, item.GetName())
+		// renderData(viewName, item.GetName() + "\n")
+	}
+	renderData(viewName, strings.Join(ns, "\n"))
+}
+
+func refreshViews(g *gocui.Gui, v *gocui.View) error {
+	renderNamespaces("Namespaces")
+	return nil
 }

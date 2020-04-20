@@ -8,6 +8,7 @@ import (
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/api/extensions/v1beta1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/clientcmd"
 )
@@ -72,12 +73,37 @@ func BuildConfig(kubeConfig KubeConfig) (clientcmd.ClientConfig, error) {
 	return clientConfig, err
 }
 
+
+func (kubeapi *KubeAPI) GetInfo() (map[string]string, error) {
+	rawConfig, err := kubeapi.Config.RawConfig()
+	if err != nil {
+		return nil, err
+	}
+
+	info := make(map[string]string)
+
+	info["context"] = rawConfig.CurrentContext
+	context := rawConfig.Contexts[rawConfig.CurrentContext]
+	info["cluster"] = rawConfig.Clusters[context.Cluster].Server
+	info["user"] = rawConfig.AuthInfos[context.AuthInfo].Username
+
+	return info, nil
+}
+
 func (kubeapi *KubeAPI) GetNamespaces() ([]v1.Namespace, error) {
 	namespaceList, err := kubeapi.Clientset.CoreV1().Namespaces().List(metav1.ListOptions{})
 	if err != nil {
 		return nil, err
 	}
 	return namespaceList.Items, nil
+}
+
+func (kubeapi *KubeAPI) DeleteNamespaces(namespaceName string) error {
+	err := kubeapi.Clientset.CoreV1().Namespaces().Delete(namespaceName, &metav1.DeleteOptions{})
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 func (kubeapi *KubeAPI) GetNodes() ([]v1.Node, error) {
@@ -159,8 +185,27 @@ func (kubeapi *KubeAPI) GetDeployments(namespace v1.Namespace) ([]v1beta1.Deploy
 	return deploymentList.Items, nil
 }
 
+func (kubeapi *KubeAPI) GetEvents() ([]v1.Event, error) {
+	eventList, err := kubeapi.Clientset.CoreV1().Events("").List(metav1.ListOptions{})
+	if err != nil {
+		return nil, err
+	}
+	return eventList.Items, nil
+}
+
+func (kubeapi *KubeAPI) WatchEvents() (watch.Interface, error) {
+	eventWatch, err := kubeapi.Clientset.CoreV1().Events("").Watch(metav1.ListOptions{})
+	if err != nil {
+		return nil, err
+	}
+	return eventWatch, nil
+}
+
 func (kubeapi *KubeAPI) DryRun() {
 	fmt.Println("Dry Run")
+
+	info, _ := kubeapi.GetInfo()
+	fmt.Printf("%+v", info)
 
 	// Namespaces
 	namespaces, _ := kubeapi.GetNamespaces()
