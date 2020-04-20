@@ -18,7 +18,7 @@ var (
 )
 
 type KubeAPI struct {
-	Config clientcmd.ClientConfig
+	Config    clientcmd.ClientConfig
 	Clientset *kubernetes.Clientset
 }
 
@@ -39,7 +39,7 @@ func NewKubeAPI(kubeConfig KubeConfig) (*KubeAPI, error) {
 	}
 
 	kubeapi := &KubeAPI{
-		Config: config,
+		Config:    config,
 		Clientset: clientset,
 	}
 
@@ -56,7 +56,7 @@ func BuildConfig(kubeConfig KubeConfig) (clientcmd.ClientConfig, error) {
 	var (
 		// config *rest.Config
 		clientConfig clientcmd.ClientConfig
-		err    error
+		err          error
 	)
 
 	if kubeConfig.Type == "MANIFEST" {
@@ -72,7 +72,6 @@ func BuildConfig(kubeConfig KubeConfig) (clientcmd.ClientConfig, error) {
 	}
 	return clientConfig, err
 }
-
 
 func (kubeapi *KubeAPI) GetInfo() (map[string]string, error) {
 	rawConfig, err := kubeapi.Config.RawConfig()

@@ -11,15 +11,22 @@ import (
 )
 
 var (
-	app     *App
-	viewArr = []string{"Info", "Namespaces", "Main", "Services"}
-	active  = 0
-	state   = map[string]string{}
+	ViewInfo       = "Info"
+	ViewNamespaces = "Namespaces"
+	ViewMain       = "Main"
+	ViewServices   = "Services"
+)
+
+var (
+	app             *App
+	viewSequence    = []string{ViewInfo, ViewNamespaces, ViewMain, ViewServices}
+	activeViewIndex = 0
+	state           = map[string]string{} // TODO: Move this to App struct
 )
 
 type App struct {
 	kubeapi *k8s.KubeAPI
-	g *gocui.Gui
+	g       *gocui.Gui
 }
 
 func NewApp(kubeapi *k8s.KubeAPI) (*App, error) {
@@ -65,7 +72,7 @@ func (app *App) Start() {
 	}
 
 	// Select Panel
-	if err := g.SetKeybinding("", gocui.MouseLeft, gocui.ModNone, selectPanel); err != nil {
+	if err := g.SetKeybinding("", gocui.MouseLeft, gocui.ModNone, selectView); err != nil {
 		log.Panicln(err)
 	}
 
@@ -93,7 +100,7 @@ func layout(g *gocui.Gui) error {
 	pad := 1
 	gridX, gridY := maxX/4, maxY/3
 
-	if v, err := g.SetView("Info", 0, 0, gridX-pad, gridY-pad); err != nil {
+	if v, err := g.SetView(ViewInfo, 0, 0, gridX-pad, gridY-pad); err != nil {
 		if err != gocui.ErrUnknownView {
 			return err
 		}
@@ -108,7 +115,7 @@ func layout(g *gocui.Gui) error {
 		fmt.Fprintf(v, "Nodes: %-10v\n", len(nodes))
 	}
 
-	if v, err := g.SetView("Namespaces", 0, gridY, gridX-pad, (gridY*2)-pad); err != nil {
+	if v, err := g.SetView(ViewNamespaces, 0, gridY, gridX-pad, (gridY*2)-pad); err != nil {
 		if err != gocui.ErrUnknownView {
 			return err
 		}
@@ -121,7 +128,7 @@ func layout(g *gocui.Gui) error {
 		renderNamespaces(v.Name())
 	}
 
-	if v, err := g.SetView("Main", gridX, 0, gridX*4, (gridY*2)-pad); err != nil {
+	if v, err := g.SetView(ViewMain, gridX, 0, gridX*4, (gridY*2)-pad); err != nil {
 		if err != gocui.ErrUnknownView {
 			return err
 		}
@@ -134,7 +141,7 @@ func layout(g *gocui.Gui) error {
 		// app.kubeapi.GetContainerLogs("kube-system", "kube-apiserver-kind-control-plane", "kube-apiserver", v)
 	}
 
-	if v, err := g.SetView("Services", 0, gridY*2, gridX*4, gridY*3); err != nil {
+	if v, err := g.SetView(ViewServices, 0, gridY*2, gridX*4, gridY*3); err != nil {
 		if err != gocui.ErrUnknownView {
 			return err
 		}
@@ -147,6 +154,7 @@ func layout(g *gocui.Gui) error {
 		// 	fmt.Fprintln(v, item.GetName(), item.Message)
 		// }
 
+		// TODO: Fix this Watch Channel
 		eventWatch, err := app.kubeapi.WatchEvents()
 		if err != nil {
 			return err
@@ -165,7 +173,6 @@ func layout(g *gocui.Gui) error {
 }
 
 func quit(g *gocui.Gui, v *gocui.View) error {
-	fmt.Printf("%+v", state)
 	return gocui.ErrQuit
 }
 
@@ -177,18 +184,18 @@ func setCurrentViewOnTop(g *gocui.Gui, name string) (*gocui.View, error) {
 }
 
 func nextView(g *gocui.Gui, v *gocui.View) error {
-	nextIndex := (active + 1) % len(viewArr)
-	name := viewArr[nextIndex]
+	nextIndex := (activeViewIndex + 1) % len(viewSequence)
+	name := viewSequence[nextIndex]
 
 	if _, err := setCurrentViewOnTop(g, name); err != nil {
 		return err
 	}
 
-	active = nextIndex
+	activeViewIndex = nextIndex
 	return nil
 }
 
-func selectPanel(g *gocui.Gui, v *gocui.View) error {
+func selectView(g *gocui.Gui, v *gocui.View) error {
 	_, err := g.SetCurrentView(v.Name())
 	return err
 }
@@ -315,18 +322,16 @@ func renderData(viewName string, data string) {
 	})
 }
 
-func renderNamespaces(viewName string)  {
+func renderNamespaces(viewName string) {
 	namespaces, _ := app.kubeapi.GetNamespaces()
 	var ns []string
 	for _, item := range namespaces {
-		// fmt.Fprintln(v, item.GetName())
 		ns = append(ns, item.GetName())
-		// renderData(viewName, item.GetName() + "\n")
 	}
 	renderData(viewName, strings.Join(ns, "\n"))
 }
 
 func refreshViews(g *gocui.Gui, v *gocui.View) error {
-	renderNamespaces("Namespaces")
+	renderNamespaces(ViewNamespaces)
 	return nil
 }

@@ -22,8 +22,8 @@ var (
 )
 
 var rootCmd = &cobra.Command{
-	Use:   "lazykubectl",
-	Short: "A Kubernetes Client",
+	Use:          "lazykubectl",
+	Short:        "A Kubernetes Client",
 	SilenceUsage: true,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		fmt.Println("lazykubectl")
