@@ -50,6 +50,30 @@ import (
     "k8s.io/client-go/tools/clientcmd"
 )
 
+clientConfig := clientcmd.NewNonInteractiveDeferredLoadingClientConfig(
+		&clientcmd.ClientConfigLoadingRules{ExplicitPath: kubeconfig},
+		&clientcmd.ConfigOverrides{CurrentContext: kubeContext})
+
+	rawConfig, err := clientConfig.RawConfig()
+rawConfig.CurrentContext
+
+
+
+
+
+
+go func() {
+    for event := range watch.ResultChan() {
+        fmt.Printf("Type: %v\n", event.Type)
+        p, ok := event.Object.(*v1.Pod)
+        if !ok {
+            log.Fatal("unexpected type")
+        }
+        fmt.Println(p.Status.ContainerStatuses)
+        fmt.Println(p.Status.Phase)
+    }
+}()
+time.Sleep(5 * time.Second)
 
 
     

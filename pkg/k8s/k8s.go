@@ -9,11 +9,15 @@ import (
 	"k8s.io/api/extensions/v1beta1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 )
 
+var (
+	ErrNoClusterConnectivity = errors.New("not able to connect to Kubernetes Cluster")
+)
+
 type KubeAPI struct {
+	Config clientcmd.ClientConfig
 	Clientset *kubernetes.Clientset
 }
 
@@ -23,25 +27,52 @@ func NewKubeAPI(kubeConfig KubeConfig) (*KubeAPI, error) {
 		return nil, err
 	}
 
-	clientset, err := kubernetes.NewForConfig(config)
+	restConfig, err := config.ClientConfig()
+	if err != nil {
+		return nil, err
+	}
+
+	clientset, err := kubernetes.NewForConfig(restConfig)
 	if err != nil {
 		return nil, err
 	}
 
 	kubeapi := &KubeAPI{
+		Config: config,
 		Clientset: clientset,
 	}
 
 	// HACK: Checking the connectivity of cluster
-	_, err = kubeapi.SearchNamespaces()
+	_, err = kubeapi.GetNamespaces()
 	if err != nil {
-		return nil, errors.New("not able to connect to Kubernetes Cluster")
+		return nil, ErrNoClusterConnectivity
 	}
 
 	return kubeapi, nil
 }
 
-func (kubeapi *KubeAPI) SearchNamespaces() ([]v1.Namespace, error) {
+func BuildConfig(kubeConfig KubeConfig) (clientcmd.ClientConfig, error) {
+	var (
+		// config *rest.Config
+		clientConfig clientcmd.ClientConfig
+		err    error
+	)
+
+	if kubeConfig.Type == "MANIFEST" {
+		// Building config from Manifest YAML File Content
+		// config, err = clientcmd.RESTConfigFromKubeConfig([]byte(kubeConfig.Manifest))
+		// if err != nil {
+		// 	return nil, err
+		// }
+		clientConfig, err = clientcmd.NewClientConfigFromBytes([]byte(kubeConfig.Manifest))
+		if err != nil {
+			return nil, err
+		}
+	}
+	return clientConfig, err
+}
+
+func (kubeapi *KubeAPI) GetNamespaces() ([]v1.Namespace, error) {
 	namespaceList, err := kubeapi.Clientset.CoreV1().Namespaces().List(metav1.ListOptions{})
 	if err != nil {
 		return nil, err
@@ -49,50 +80,11 @@ func (kubeapi *KubeAPI) SearchNamespaces() ([]v1.Namespace, error) {
 	return namespaceList.Items, nil
 }
 
-func BuildConfig(kubeConfig KubeConfig) (*rest.Config, error) {
-	var (
-		config *rest.Config
-		err    error
-	)
-
-	if kubeConfig.Type == "MANIFEST" {
-		// Building config from Manifest YAML File Content
-		config, err = clientcmd.RESTConfigFromKubeConfig([]byte(kubeConfig.Manifest))
-	}
-	return config, err
-}
-
-// func (kubeapi *KubeAPI) SearchNamespaces() ([]v1.Namespace, error) {
-// 	namespaceList, err := kubeapi.Clientset.CoreV1().Namespaces().List(metav1.ListOptions{})
-// 	if err != nil {
-// 		return nil, err
-// 	}
-// 	// fmt.Println("Namespaces: ")
-// 	// for _, pod := range namespaceList.Items {
-// 	// 	fmt.Println("\t", pod.GetName())
-// 	// }
-// 	return namespaceList.Items, nil
-// }
-
 func (kubeapi *KubeAPI) GetNodes() ([]v1.Node, error) {
 	nodeList, err := kubeapi.Clientset.CoreV1().Nodes().List(metav1.ListOptions{})
 	if err != nil {
 		return nil, err
 	}
-	// for _, node := range nodeList.Items {
-	// 	fmt.Println("\t", node.GetName())
-	// }
-	// for _, condition := range node.Status.Conditions {
-	// 	if condition.Reason == "KubeletReady" {
-	// 		if condition.Status == "True" {
-	// 			nodeStatus = "Ready"
-	// 		} else if condition.Reason == "False" {
-	// 			nodeStatus = "NotReady"
-	// 		} else {
-	// 			nodeStatus = "Unknown"
-	// 		}
-	// 	}
-	// }
 	return nodeList.Items, nil
 }
 
@@ -165,4 +157,58 @@ func (kubeapi *KubeAPI) GetDeployments(namespace v1.Namespace) ([]v1beta1.Deploy
 		fmt.Println("\t", deployment.GetName())
 	}
 	return deploymentList.Items, nil
+}
+
+func (kubeapi *KubeAPI) DryRun() {
+	fmt.Println("Dry Run")
+
+	// Namespaces
+	namespaces, _ := kubeapi.GetNamespaces()
+	fmt.Println("Namespaces: ")
+	for _, namespace := range namespaces {
+		fmt.Println("\t", namespace.GetName())
+	}
+
+	// Pods
+	for _, namespace := range namespaces {
+		fmt.Println("\t", namespace.GetName())
+
+		pods, _ := kubeapi.GetPods(namespace.GetName())
+		fmt.Println("Pods: ")
+		for _, pod := range pods {
+			fmt.Println("\t", pod.GetName())
+		}
+	}
+
+	// Services
+	for _, namespace := range namespaces {
+		fmt.Println("\t", namespace.GetName())
+
+		services, _ := kubeapi.GetServices(namespace.GetName())
+		fmt.Println("Services: ")
+		for _, service := range services {
+			fmt.Println("\t", service.GetName())
+		}
+	}
+
+	// k8s.GetContainers(clientset, "kube-system", "kube-apiserver-kind-control-plane")
+	// k8s.GetContainers(clientset, "kube-system", "kube-controller-manager-kind-control-plane")
+	// k8s.GetContainers(clientset, "kube-system", "kube-scheduler-kind-control-plane")
+
+	// err := k8s.GetContainerLogs(clientset, "kube-system", "kube-apiserver-kind-control-plane", "kube-apiserver", os.Stdout)
+
+	// for _, node := range nodeList.Items {
+	// 	fmt.Println("\t", node.GetName())
+	// }
+	// for _, condition := range node.Status.Conditions {
+	// 	if condition.Reason == "KubeletReady" {
+	// 		if condition.Status == "True" {
+	// 			nodeStatus = "Ready"
+	// 		} else if condition.Reason == "False" {
+	// 			nodeStatus = "NotReady"
+	// 		} else {
+	// 			nodeStatus = "Unknown"
+	// 		}
+	// 	}
+	// }
 }

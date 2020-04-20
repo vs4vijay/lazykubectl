@@ -17,12 +17,14 @@ import (
 var (
 	cfgFile        string
 	kubeConfigFile string
+	dryrun         bool
 	home           = k8s.Home()
 )
 
 var rootCmd = &cobra.Command{
 	Use:   "lazykubectl",
 	Short: "A Kubernetes Client",
+	SilenceUsage: true,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		fmt.Println("lazykubectl")
 
@@ -47,9 +49,11 @@ var rootCmd = &cobra.Command{
 			return err
 		}
 
-		app.Start()
-
-		// tui.StartApp(kubeConfig)
+		if dryrun {
+			kubeapi.DryRun()
+		} else {
+			app.Start()
+		}
 		return nil
 	},
 }
@@ -68,6 +72,7 @@ func init() {
 
 	flags := rootCmd.Flags()
 	flags.StringVarP(&kubeConfigFile, "kubeconfig", "c", filepath.Join(home, ".kube", "config"), "")
+	flags.BoolVar(&dryrun, "dryrun", false, "")
 }
 
 // initConfig reads in config file and ENV variables if set.

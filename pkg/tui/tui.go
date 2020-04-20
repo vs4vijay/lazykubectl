@@ -102,7 +102,7 @@ func layout(g *gocui.Gui) error {
 		v.SelBgColor = gocui.ColorGreen
 		v.SelFgColor = gocui.ColorBlack
 
-		namespaces, _ := app.kubeapi.SearchNamespaces()
+		namespaces, _ := app.kubeapi.GetNamespaces()
 		for _, item := range namespaces {
 			fmt.Fprintln(v, item.GetName())
 		}
@@ -114,8 +114,11 @@ func layout(g *gocui.Gui) error {
 		}
 		v.Title = "Pods"
 		v.Highlight = true
+		v.Autoscroll = true
 		v.SelBgColor = gocui.ColorGreen
 		v.SelFgColor = gocui.ColorBlack
+
+		// app.kubeapi.GetContainerLogs("kube-system", "kube-apiserver-kind-control-plane", "kube-apiserver", v)
 	}
 
 	if v, err := g.SetView("Services", 0, gridY*2, gridX*4, gridY*3); err != nil {
@@ -166,6 +169,11 @@ func onSelectNamespace(g *gocui.Gui, v *gocui.View) error {
 	g.Update(func(g *gocui.Gui) error {
 		podsView, _ := g.View("Main")
 		podsView.Clear()
+
+		// podsView.Autoscroll = true
+		// fmt.Fprintf(podsView, "%-20s %-15s\n", "POD NAME", "POD STATUS")
+		// app.kubeapi.GetContainerLogs("kube-system", "kube-apiserver-kind-control-plane", "kube-apiserver", podsView)
+		// return nil
 
 		pods, _ := app.kubeapi.GetPods(namespaceName)
 		podsView.Title = fmt.Sprintf("Pods(%v) - %v", len(pods), namespaceName)
@@ -225,7 +233,6 @@ func onSelectMain(g *gocui.Gui, view *gocui.View) error {
 			// view.Wrap = true
 			// view.FgColor = gocui.ColorWhite
 			// view.SelBgColor = gocui.ColorBlue
-
 
 			app.kubeapi.GetContainerLogs(state["namespace"], state["pod"], state["container"], view)
 			return nil
