@@ -77,6 +77,7 @@ func (app *App) Start() {
 		log.Panicln(err)
 	}
 
+	// Namespaces Handler
 	if err := g.SetKeybinding("Namespaces", gocui.MouseLeft, gocui.ModNone, onSelectNamespace); err != nil {
 		log.Panicln(err)
 	}
@@ -174,14 +175,13 @@ func layout(g *gocui.Gui) error {
 		if err != nil {
 			return err
 		}
-		// TODO: Stop event at trigger
+		// TODO: Stop event at some trigger
 		// eventWatch.Stop()
 		go func() {
 			for event := range eventWatch.ResultChan() {
 				e, _ := event.Object.(*v1.Event)
-				// fmt.Printf("%v : %v \n", e.GetName(), e.Message)
-				l := fmt.Sprintf("%v (%v) - %v/%v : %v", event.Type, string(e.Kind), e.Namespace, e.Name, e.Message)
-				renderData(v.Name(), l + "\n", false)
+				l := fmt.Sprintf("%v (%v) - %v/%v : %v", event.Type, e.Kind, e.Namespace, e.Name, e.Message)
+				renderData(v.Name(), l+"\n", false, "")
 			}
 		}()
 
@@ -222,35 +222,8 @@ func onSelectNamespace(g *gocui.Gui, v *gocui.View) error {
 	namespaceName := getSelectedText(v)
 	state["namespace"] = namespaceName
 
-	g.Update(func(g *gocui.Gui) error {
-		podsView, _ := g.View("Main")
-		podsView.Clear()
-
-		// podsView.Autoscroll = true
-		// fmt.Fprintf(podsView, "%-20s %-15s\n", "POD NAME", "POD STATUS")
-		// app.kubeapi.GetContainerLogs("kube-system", "kube-apiserver-kind-control-plane", "kube-apiserver", podsView)
-		// return nil
-
-		// pods, _ := app.kubeapi.GetPods(namespaceName)
-		// podsView.Title = fmt.Sprintf("Pods(%v) - %v", len(pods), namespaceName)
-		// fmt.Fprintf(podsView, "%-20s %-15s\n", "POD NAME", "POD STATUS")
-		// for _, item := range pods {
-		// 	fmt.Fprintf(podsView, "%-20s %-15s\n", item.GetName(), item.Status.Phase)
-		// }
-
-		renderPods(ViewMain, namespaceName)
-		renderServices(ViewServices, namespaceName)
-
-		// servicesView, _ := g.View("Services")
-		// servicesView.Clear()
-		//
-		// services, _ := app.kubeapi.GetServices(namespaceName)
-		// servicesView.Title = fmt.Sprintf("Services(%s)", namespaceName)
-		// for _, item := range services {
-		// 	fmt.Fprintln(servicesView, item.GetName())
-		// }
-		return nil
-	})
+	renderPods(ViewMain, namespaceName)
+	renderServices(ViewServices, namespaceName)
 
 	return nil
 }
@@ -267,18 +240,8 @@ func onSelectMain(g *gocui.Gui, view *gocui.View) error {
 		// Building Containers View
 		state["pod"] = selectedData
 
-		g.Update(func(g *gocui.Gui) error {
-			view.Clear()
-			view.SelBgColor = gocui.ColorBlue
+		renderContainers(ViewMain, state["namespace"], state["pod"])
 
-			containers, _ := app.kubeapi.GetContainers(state["namespace"], state["pod"])
-			fmt.Fprintf(view, "%-20s\n", "CONTAINER NAME")
-			view.Title = fmt.Sprintf("Containers(%v) - %v", len(containers), state["pod"])
-			for _, item := range containers {
-				fmt.Fprintf(view, "%-20s\n", item.Name)
-			}
-			return nil
-		})
 	} else if strings.HasPrefix(view.Title, "Containers") {
 		// Building Logs View
 		state["container"] = selectedData
@@ -293,20 +256,20 @@ func onSelectMain(g *gocui.Gui, view *gocui.View) error {
 			// view.FgColor = gocui.ColorWhite
 			// view.SelBgColor = gocui.ColorBlue
 
-			// app.kubeapi.GetContainerLogs(state["namespace"], state["pod"], state["container"], view)
+			app.kubeapi.GetContainerLogs(state["namespace"], state["pod"], state["container"], view)
 
-			logWatch, err := app.kubeapi.WatchPodLogs(state["namespace"], state["pod"])
-			if err != nil {
-				return err
-			}
-			go func() {
-				for event := range logWatch.ResultChan() {
-					// e, _ := event.Object.(*v1.Namespace)
-					fmt.Printf("%v \n", event)
-					// fmt.Printf("%v : %v \n", e.GetName(), e.Message)
-					renderData(ViewLogs, "string(event.Type)" + "\n", false)
-				}
-			}()
+			// logWatch, err := app.kubeapi.WatchPodLogs(state["namespace"], state["pod"])
+			// if err != nil {
+			// 	return err
+			// }
+			// go func() {
+			// 	for event := range logWatch.ResultChan() {
+			// 		// e, _ := event.Object.(*v1.Namespace)
+			// 		fmt.Printf("%v \n", event)
+			// 		// fmt.Printf("%v : %v \n", e.GetName(), e.Message)
+			// 		renderData(ViewLogs, "string(event.Type)" + "\n", false)
+			// 	}
+			// }()
 
 			return nil
 		})
@@ -321,21 +284,7 @@ func deleteNamespace(g *gocui.Gui, v *gocui.View) error {
 	if err != nil {
 		return err
 	}
-	// renderNamespaces(v.Name())
-	g.Update(func(g *gocui.Gui) error {
-		view, _ := g.View("Namespaces")
-		view.Clear()
-		// view.SetCursor(0, 0 )
-		// view.SetOrigin(0, 0 )
-
-		namespaces, _ := app.kubeapi.GetNamespaces()
-		for _, item := range namespaces {
-			fmt.Fprintln(view, item.GetName())
-		}
-
-		// fmt.Fprintf(view, "data")
-		return nil
-	})
+	renderNamespaces(v.Name())
 	return nil
 }
 
@@ -348,13 +297,16 @@ func getSelectedText(view *gocui.View) string {
 	return line
 }
 
-func renderData(viewName string, data string, clear bool) {
+func renderData(viewName string, data string, clear bool, title string) {
 	app.g.Update(func(g *gocui.Gui) error {
 		view, _ := g.View(viewName)
 		if clear {
 			view.Clear()
 		}
-		fmt.Fprintf(view, data)
+		if title != "" {
+			view.Title = title
+		}
+ 		fmt.Fprintf(view, data)
 		return nil
 	})
 }
@@ -366,16 +318,27 @@ func renderNamespaces(viewName string) {
 	for _, item := range namespaces {
 		ns = append(ns, item.GetName())
 	}
-	renderData(viewName, strings.Join(ns, "\n"), true)
+	renderData(viewName, strings.Join(ns, "\n"), true, "")
 }
 
 func renderPods(viewName string, namespaceName string) {
 	pods, _ := app.kubeapi.GetPods(namespaceName)
+	title := fmt.Sprintf("Pods(%v)", len(pods))
 	var pos []string
 	for _, item := range pods {
 		pos = append(pos, item.GetName())
 	}
-	renderData(viewName, strings.Join(pos, "\n"), true)
+	renderData(viewName, strings.Join(pos, "\n"), true, title)
+}
+
+func renderContainers(viewName string, namespaceName string, podName string) {
+	containers, _ := app.kubeapi.GetContainers(namespaceName, podName)
+	title := fmt.Sprintf("Containers(%v) - %v", len(containers), podName)
+	var cs []string
+	for _, item := range containers {
+		cs = append(cs, item.Name)
+	}
+	renderData(viewName, strings.Join(cs, "\n"), true, title)
 }
 
 func renderServices(viewName string, namespaceName string) {
@@ -384,7 +347,7 @@ func renderServices(viewName string, namespaceName string) {
 	for _, item := range services {
 		svcs = append(svcs, item.GetName())
 	}
-	renderData(viewName, strings.Join(svcs, "\n"), true)
+	renderData(viewName, strings.Join(svcs, "\n"), true, "Services")
 }
 
 func refreshViews(g *gocui.Gui, v *gocui.View) error {
