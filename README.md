@@ -4,7 +4,8 @@
 
 ## References
 - https://pkg.go.dev/k8s.io/client-go/kubernetes?tab=doc
-- 
+- https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.10/
+
 
 ## ToDo
 - [x] Auth
@@ -88,6 +89,46 @@ time.Sleep(5 * time.Second)
         fmt.Println(p.Status.Phase)
     }
 
+
+watchlist := cache.NewListWatchFromClient(clientset.Core().RESTClient(), "pods", v1.NamespaceDefault, 
+       fields.Everything())
+    _, controller := cache.NewInformer(
+        watchlist,
+        &v1.Pod{},
+        time.Second * 0,
+        cache.ResourceEventHandlerFuncs{
+            AddFunc: func(obj interface{}) {
+                fmt.Printf("add: %s \n", obj)
+            },
+            DeleteFunc: func(obj interface{}) {
+                fmt.Printf("delete: %s \n", obj)
+            },
+            UpdateFunc:func(oldObj, newObj interface{}) {
+                fmt.Printf("old: %s, new: %s \n", oldObj, newObj)
+            },
+        },
+    )
+    stop := make(chan struct{})
+    go controller.Run(stop)
+
+
+informer := cache.NewSharedIndexInformer(
+			&cache.ListWatch{
+				ListFunc: func(options meta_v1.ListOptions) (runtime.Object, error) {
+					return kubeClient.CoreV1().Pods(conf.Namespace).List(options)
+				},
+				WatchFunc: func(options meta_v1.ListOptions) (watch.Interface, error) {
+					return kubeClient.CoreV1().Pods(conf.Namespace).Watch(options)
+				},
+			},
+			&api_v1.Pod{},
+			0, //Skip resync
+			cache.Indexers{},
+		)
+
+
+
+
 	deploymentsClient := clientset.ExtensionsV1beta1().Deployments("namespace-ffledgling")
 
 	// List existing deployments in namespace
@@ -140,15 +181,21 @@ func Loader() string {
 
 https://stackoverflow.com/questions/40975307/how-to-watch-events-on-a-kubernetes-service-using-its-go-client
 
+https://github.com/NetApp/trident/blob/master/k8s_client/k8s_client.go
+
 cache.NewInformer
 NewSharedIndexInformer
-
-
 
 
     CPU
     MEM
     View Logs
     Execute Shell
-    ? Events
+    Events
+
+
+https://raw.githubusercontent.com/kubernetes/kubernetes/master/hack/testdata/recursive/pod/pod/busybox.yaml
+https://raw.githubusercontent.com/istio/istio/master/samples/sleep/sleep.yaml
+
+
 ```

@@ -13,13 +13,14 @@ import (
 var (
 	ViewInfo       = "Info"
 	ViewNamespaces = "Namespaces"
+	ViewServices = "Services"
 	ViewMain       = "Main"
-	ViewServices   = "Services"
+	ViewLogs       = "Logs"
 )
 
 var (
 	app             *App
-	viewSequence    = []string{ViewInfo, ViewNamespaces, ViewMain, ViewServices}
+	viewSequence    = []string{ViewInfo, ViewNamespaces, ViewMain, ViewLogs}
 	activeViewIndex = 0
 	state           = map[string]string{} // TODO: Move this to App struct
 )
@@ -80,6 +81,10 @@ func (app *App) Start() {
 		log.Panicln(err)
 	}
 
+	if err := g.SetKeybinding("Namespaces", gocui.KeyEnter, gocui.ModNone, onSelectNamespace); err != nil {
+		log.Panicln(err)
+	}
+
 	if err := g.SetKeybinding("Namespaces", 'd', gocui.ModNone, deleteNamespace); err != nil {
 		log.Panicln(err)
 	}
@@ -100,7 +105,7 @@ func layout(g *gocui.Gui) error {
 	pad := 1
 	gridX, gridY := maxX/4, maxY/3
 
-	if v, err := g.SetView(ViewInfo, 0, 0, gridX-pad, gridY-pad); err != nil {
+	if v, err := g.SetView(ViewInfo, 0, 0, gridX-pad, (gridY/2)-pad); err != nil {
 		if err != gocui.ErrUnknownView {
 			return err
 		}
@@ -115,7 +120,7 @@ func layout(g *gocui.Gui) error {
 		fmt.Fprintf(v, "Nodes: %-10v\n", len(nodes))
 	}
 
-	if v, err := g.SetView(ViewNamespaces, 0, gridY, gridX-pad, (gridY*2)-pad); err != nil {
+	if v, err := g.SetView(ViewNamespaces, 0, gridY/2, gridX-pad, (gridY)-pad); err != nil {
 		if err != gocui.ErrUnknownView {
 			return err
 		}
@@ -128,6 +133,19 @@ func layout(g *gocui.Gui) error {
 		renderNamespaces(v.Name())
 	}
 
+	if v, err := g.SetView(ViewServices, 0, gridY, gridX-pad, (gridY*2)-pad); err != nil {
+		if err != gocui.ErrUnknownView {
+			return err
+		}
+
+		v.Title = "Services"
+		v.Highlight = true
+		v.SelBgColor = gocui.ColorRed
+		v.SelFgColor = gocui.ColorBlack
+
+		renderServices(v.Name(), "")
+	}
+
 	if v, err := g.SetView(ViewMain, gridX, 0, gridX*4, (gridY*2)-pad); err != nil {
 		if err != gocui.ErrUnknownView {
 			return err
@@ -138,32 +156,32 @@ func layout(g *gocui.Gui) error {
 		v.SelBgColor = gocui.ColorGreen
 		v.SelFgColor = gocui.ColorBlack
 
+		renderPods(ViewMain, "")
+
 		// app.kubeapi.GetContainerLogs("kube-system", "kube-apiserver-kind-control-plane", "kube-apiserver", v)
 	}
 
-	if v, err := g.SetView(ViewServices, 0, gridY*2, gridX*4, gridY*3); err != nil {
+	if v, err := g.SetView(ViewLogs, 0, gridY*2, gridX*4, gridY*3); err != nil {
 		if err != gocui.ErrUnknownView {
 			return err
 		}
-		v.Title = "Services"
+		v.Title = "Logs"
+		v.Highlight = true
 		v.Wrap = true
 		v.Autoscroll = true
 
-		// events, _ := app.kubeapi.GetEvents()
-		// for _, item := range events {
-		// 	fmt.Fprintln(v, item.GetName(), item.Message)
-		// }
-
-		// TODO: Fix this Watch Channel
 		eventWatch, err := app.kubeapi.WatchEvents()
 		if err != nil {
 			return err
 		}
+		// TODO: Stop event at trigger
+		// eventWatch.Stop()
 		go func() {
 			for event := range eventWatch.ResultChan() {
 				e, _ := event.Object.(*v1.Event)
-				// fmt.Sprintf("%v : %v \n", e.GetName(), e.Message)
-				renderData(v.Name(), e.Message)
+				// fmt.Printf("%v : %v \n", e.GetName(), e.Message)
+				l := fmt.Sprintf("%v (%v) - %v/%v : %v", event.Type, string(e.Kind), e.Namespace, e.Name, e.Message)
+				renderData(v.Name(), l + "\n", false)
 			}
 		}()
 
@@ -213,12 +231,15 @@ func onSelectNamespace(g *gocui.Gui, v *gocui.View) error {
 		// app.kubeapi.GetContainerLogs("kube-system", "kube-apiserver-kind-control-plane", "kube-apiserver", podsView)
 		// return nil
 
-		pods, _ := app.kubeapi.GetPods(namespaceName)
-		podsView.Title = fmt.Sprintf("Pods(%v) - %v", len(pods), namespaceName)
-		fmt.Fprintf(podsView, "%-20s %-15s\n", "POD NAME", "POD STATUS")
-		for _, item := range pods {
-			fmt.Fprintf(podsView, "%-20s %-15s\n", item.GetName(), item.Status.Phase)
-		}
+		// pods, _ := app.kubeapi.GetPods(namespaceName)
+		// podsView.Title = fmt.Sprintf("Pods(%v) - %v", len(pods), namespaceName)
+		// fmt.Fprintf(podsView, "%-20s %-15s\n", "POD NAME", "POD STATUS")
+		// for _, item := range pods {
+		// 	fmt.Fprintf(podsView, "%-20s %-15s\n", item.GetName(), item.Status.Phase)
+		// }
+
+		renderPods(ViewMain, namespaceName)
+		renderServices(ViewServices, namespaceName)
 
 		// servicesView, _ := g.View("Services")
 		// servicesView.Clear()
@@ -272,7 +293,21 @@ func onSelectMain(g *gocui.Gui, view *gocui.View) error {
 			// view.FgColor = gocui.ColorWhite
 			// view.SelBgColor = gocui.ColorBlue
 
-			app.kubeapi.GetContainerLogs(state["namespace"], state["pod"], state["container"], view)
+			// app.kubeapi.GetContainerLogs(state["namespace"], state["pod"], state["container"], view)
+
+			logWatch, err := app.kubeapi.WatchPodLogs(state["namespace"], state["pod"])
+			if err != nil {
+				return err
+			}
+			go func() {
+				for event := range logWatch.ResultChan() {
+					// e, _ := event.Object.(*v1.Namespace)
+					fmt.Printf("%v \n", event)
+					// fmt.Printf("%v : %v \n", e.GetName(), e.Message)
+					renderData(ViewLogs, "string(event.Type)" + "\n", false)
+				}
+			}()
+
 			return nil
 		})
 	}
@@ -313,10 +348,12 @@ func getSelectedText(view *gocui.View) string {
 	return line
 }
 
-func renderData(viewName string, data string) {
+func renderData(viewName string, data string, clear bool) {
 	app.g.Update(func(g *gocui.Gui) error {
 		view, _ := g.View(viewName)
-		view.Clear()
+		if clear {
+			view.Clear()
+		}
 		fmt.Fprintf(view, data)
 		return nil
 	})
@@ -325,10 +362,29 @@ func renderData(viewName string, data string) {
 func renderNamespaces(viewName string) {
 	namespaces, _ := app.kubeapi.GetNamespaces()
 	var ns []string
+	ns = append(ns, "\n")
 	for _, item := range namespaces {
 		ns = append(ns, item.GetName())
 	}
-	renderData(viewName, strings.Join(ns, "\n"))
+	renderData(viewName, strings.Join(ns, "\n"), true)
+}
+
+func renderPods(viewName string, namespaceName string) {
+	pods, _ := app.kubeapi.GetPods(namespaceName)
+	var pos []string
+	for _, item := range pods {
+		pos = append(pos, item.GetName())
+	}
+	renderData(viewName, strings.Join(pos, "\n"), true)
+}
+
+func renderServices(viewName string, namespaceName string) {
+	services, _ := app.kubeapi.GetServices(namespaceName)
+	var svcs []string
+	for _, item := range services {
+		svcs = append(svcs, item.GetName())
+	}
+	renderData(viewName, strings.Join(svcs, "\n"), true)
 }
 
 func refreshViews(g *gocui.Gui, v *gocui.View) error {

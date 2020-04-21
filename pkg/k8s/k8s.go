@@ -4,9 +4,10 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"time"
 
+	appsv1 "k8s.io/api/apps/v1"
 	v1 "k8s.io/api/core/v1"
-	"k8s.io/api/extensions/v1beta1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/kubernetes"
@@ -85,6 +86,7 @@ func (kubeapi *KubeAPI) GetInfo() (map[string]string, error) {
 	context := rawConfig.Contexts[rawConfig.CurrentContext]
 	info["cluster"] = rawConfig.Clusters[context.Cluster].Server
 	info["user"] = rawConfig.AuthInfos[context.AuthInfo].Username
+	// info["server_version"] = kubeapi.Clientset.Discovery().ServerVersion()
 
 	return info, nil
 }
@@ -103,6 +105,14 @@ func (kubeapi *KubeAPI) DeleteNamespaces(namespaceName string) error {
 		return err
 	}
 	return nil
+}
+
+func (kubeapi *KubeAPI) WatchNamespaces() (watch.Interface, error) {
+	namespaceWatch, err := kubeapi.Clientset.CoreV1().Namespaces().Watch(metav1.ListOptions{})
+	if err != nil {
+		return nil, err
+	}
+	return namespaceWatch, nil
 }
 
 func (kubeapi *KubeAPI) GetNodes() ([]v1.Node, error) {
@@ -171,9 +181,24 @@ func (kubeapi *KubeAPI) GetContainerLogs(namespace string, podName string, conta
 	return err
 }
 
-func (kubeapi *KubeAPI) GetDeployments(namespace v1.Namespace) ([]v1beta1.Deployment, error) {
-	deploymentList, err := kubeapi.Clientset.ExtensionsV1beta1().Deployments(namespace.GetName()).List(metav1.ListOptions{})
-	// AppsV1().Deployments(namespace).List(metav1.ListOptions{})
+func (kubeapi *KubeAPI) WatchPodLogs(namespace string, podName string) (watch.Interface, error) {
+	// tailLines := int64(100)
+	podLogOptions := v1.PodLogOptions{
+		// Container: containerName,
+		// TailLines: &tailLines,
+	}
+
+	// fmt.Println("Logs: ")
+	watchLogs, err := kubeapi.Clientset.CoreV1().Pods(namespace).GetLogs(podName, &podLogOptions).Watch()
+	if err != nil {
+		return nil, err
+	}
+	return watchLogs, nil
+}
+
+func (kubeapi *KubeAPI) GetDeployments(namespace v1.Namespace) ([]appsv1.Deployment, error) {
+	deploymentList, err := kubeapi.Clientset.AppsV1().Deployments(namespace.GetName()).List(metav1.ListOptions{})
+	// ExtensionsV1beta1().Deployments(namespace).List(metav1.ListOptions{})
 	if err != nil {
 		return nil, err
 	}
@@ -193,11 +218,29 @@ func (kubeapi *KubeAPI) GetEvents() ([]v1.Event, error) {
 }
 
 func (kubeapi *KubeAPI) WatchEvents() (watch.Interface, error) {
-	eventWatch, err := kubeapi.Clientset.CoreV1().Events("").Watch(metav1.ListOptions{})
+	eventWatch, err := kubeapi.Clientset.CoreV1().Events("default").Watch(metav1.ListOptions{})
 	if err != nil {
 		return nil, err
 	}
 	return eventWatch, nil
+}
+
+func (kubeapi *KubeAPI) GetSecrets() ([]v1.Secret, error) {
+	secretList, err := kubeapi.Clientset.CoreV1().Secrets("").List(metav1.ListOptions{})
+	if err != nil {
+		return nil, err
+	}
+	return secretList.Items, nil
+}
+
+func (kubeapi *KubeAPI) CreateSecret(secret *v1.Secret) (*v1.Secret, error) {
+	// TODO: Pass namespace
+	return kubeapi.Clientset.CoreV1().Secrets("").Create(secret)
+}
+
+func (kubeapi *KubeAPI) DeleteSecret(secretName string) error {
+	// TODO: Pass namespace
+	return kubeapi.Clientset.CoreV1().Secrets("").Delete(secretName, &metav1.DeleteOptions{})
 }
 
 func (kubeapi *KubeAPI) DryRun() {
@@ -213,27 +256,54 @@ func (kubeapi *KubeAPI) DryRun() {
 		fmt.Println("\t", namespace.GetName())
 	}
 
-	// Pods
-	for _, namespace := range namespaces {
-		fmt.Println("\t", namespace.GetName())
-
-		pods, _ := kubeapi.GetPods(namespace.GetName())
-		fmt.Println("Pods: ")
-		for _, pod := range pods {
-			fmt.Println("\t", pod.GetName())
-		}
+	// Secrets
+	secrets, _ := kubeapi.GetSecrets()
+	fmt.Println("Secrets: ")
+	for _, secret := range secrets {
+		fmt.Println("\t", secret.GetName(), secret.StringData)
 	}
+
+	eventWatch, _ := kubeapi.Clientset.CoreV1().Namespaces().Watch(metav1.ListOptions{})
+	// eventWatch, _ := kubeapi.WatchEvents()
+	defer eventWatch.Stop()
+	go func() {
+		for event := range eventWatch.ResultChan() {
+			fmt.Printf("Event Type : %+v\n", event.Type)
+
+			switch event.Type {
+			case watch.Error:
+				fmt.Errorf("received error while watching pod: %s", event.Object.GetObjectKind().GroupVersionKind().String())
+			}
+
+			e, _ := event.Object.(*v1.Namespace)
+			fmt.Printf("%v : %v \n", e.GetName())
+			// renderData(v.Name(), e.Message)
+		}
+	}()
+
+	time.Sleep(20 * time.Second)
+
+	// Pods
+	// for _, namespace := range namespaces {
+	// 	fmt.Println("\t", namespace.GetName())
+	//
+	// 	pods, _ := kubeapi.GetPods(namespace.GetName())
+	// 	fmt.Println("Pods: ")
+	// 	for _, pod := range pods {
+	// 		fmt.Println("\t", pod.GetName())
+	// 	}
+	// }
 
 	// Services
-	for _, namespace := range namespaces {
-		fmt.Println("\t", namespace.GetName())
-
-		services, _ := kubeapi.GetServices(namespace.GetName())
-		fmt.Println("Services: ")
-		for _, service := range services {
-			fmt.Println("\t", service.GetName())
-		}
-	}
+	// for _, namespace := range namespaces {
+	// 	fmt.Println("\t", namespace.GetName())
+	//
+	// 	services, _ := kubeapi.GetServices(namespace.GetName())
+	// 	fmt.Println("Services: ")
+	// 	for _, service := range services {
+	// 		fmt.Println("\t", service.GetName())
+	// 	}
+	// }
 
 	// k8s.GetContainers(clientset, "kube-system", "kube-apiserver-kind-control-plane")
 	// k8s.GetContainers(clientset, "kube-system", "kube-controller-manager-kind-control-plane")
