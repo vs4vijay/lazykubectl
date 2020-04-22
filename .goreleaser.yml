@@ -25,7 +25,7 @@ brews:
       name: Vijay Soni (vs4vijay)
       email: vs4vijay@gmail.com
     folder: Formula
-    description: "lazykubectl - A better client for kubernetes"
+    description: "lazykubectl - A Terminal UI client for kubernetes"
     skip_upload: false
     install: |
       bin.install "lazykubectl"

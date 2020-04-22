@@ -51,7 +51,7 @@ func (app *App) Start() {
 	g.Mouse = true
 	// g.Cursor = true
 	// g.SelBgColor = gocui.ColorCyan
-	g.SelFgColor = gocui.ColorBlue
+	g.SelFgColor = gocui.ColorRed
 
 	g.SetManagerFunc(layout)
 

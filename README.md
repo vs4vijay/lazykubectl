@@ -1,4 +1,42 @@
 # lazykubectl
+A Terminal UI client for kubernetes
+
+> NOTE: _this project is still in an early stage_
+
+[![Release](https://github.com/vs4vijay/lazykubectl/workflows/Release/badge.svg)](https://github.com/vs4vijay/lazykubectl/releases)
+[![Release Tag](https://img.shields.io/github/tag/vs4vijay/lazykubectl.svg)](https://github.com/vs4vijay/lazykubectl/releases/latest)
+[![Go Report Card](https://goreportcard.com/badge/github.com/vs4vijay/lazykubectl)](https://goreportcard.com/report/github.com/vs4vijay/lazykubectl)
+[![Go Version](https://img.shields.io/github/go-mod/go-version/vs4vijay/lazykubectl)](https://github.com/vs4vijay/lazykubectl)
+[![GoDoc](https://godoc.org/github.com/vs4vijay/lazykubectl?status.svg)](http://godoc.org/github.com/vs4vijay/lazykubectl)
+[![Downloads](https://img.shields.io/github/downloads/vs4vijay/lazykubectl/total)](https://github.com/vs4vijay/lazykubectl/releases)
+
+---
+
+## Installation
+
+### Homebrew
+
+```
+brew install vs4vijay/tap/lazykubectl
+```
+
+### Release Binaries
+
+- https://github.com/vs4vijay/lazykubectl/releases
+
+### Via GoBinaries
+
+```shell script
+curl -sf https://gobinaries.com/vs4vijay/lazykubectl | sh
+```
+
+---
+
+## Running
+
+```
+lazykubectl
+```
 
 ---
 
@@ -30,6 +68,12 @@
 - Handle Up / Down Arrow
 - Stream Logs
 - Events
+
+---
+
+## License
+
+[MIT](LICENSE)
 
 ---
 
@@ -196,5 +240,14 @@ NewSharedIndexInformer
 
 https://raw.githubusercontent.com/kubernetes/kubernetes/master/hack/testdata/recursive/pod/pod/busybox.yaml
 https://raw.githubusercontent.com/istio/istio/master/samples/sleep/sleep.yaml
+
+
+kubectl create clusterrolebinding dashboard-admin-sa 
+--clusterrole=cluster-admin --serviceaccount=default:dashboard-admin-sa
+
+
+kubectl describe secret dashboard-admin-sa-token-kw7vn
+
+kubectl get secret $(kubectl get serviceaccount dashboard -o jsonpath="{.secrets[0].name}") -o jsonpath="{.data.token}" | base64 --decode
 
 ```

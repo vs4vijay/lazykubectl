@@ -160,10 +160,10 @@ func (kubeapi *KubeAPI) GetContainers(namespace string, podName string) ([]v1.Co
 }
 
 func (kubeapi *KubeAPI) GetContainerLogs(namespace string, podName string, containerName string, out io.Writer) error {
-	// tailLines := int64(100)
+	tailLines := int64(100)
 	podLogOptions := v1.PodLogOptions{
 		Container: containerName,
-		// TailLines: &tailLines,
+		TailLines: &tailLines,
 	}
 
 	// fmt.Println("Logs: ")
