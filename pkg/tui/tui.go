@@ -19,7 +19,7 @@ var (
 )
 
 var (
-	app             *App
+	app             *App // TODO: Not needed here once we move trigger methods to App struct
 	viewSequence    = []string{ViewInfo, ViewNamespaces, ViewMain, ViewLogs}
 	activeViewIndex = 0
 	state           = map[string]string{} // TODO: Move this to App struct

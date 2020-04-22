@@ -1,0 +1,53 @@
+before:
+  hooks:
+    - go mod download
+
+dist: bin
+
+builds:
+- env:
+  - CGO_ENABLED=0
+  goos:
+    - darwin
+    - linux
+    - windows
+  goarch:
+    - amd64
+    - 386
+
+brews:
+  - name: lazykubectl
+    github:
+      owner: vs4vijay
+      name: homebrew-tap
+    url_template: "https://github.com/vs4vijay/lazykubectl/releases/download/{{ .Tag }}/{{ .ArtifactName }}"
+    commit_author:
+      name: Vijay Soni (vs4vijay)
+      email: vs4vijay@gmail.com
+    folder: Formula
+    description: "lazykubectl - A better client for kubernetes"
+    skip_upload: false
+    install: |
+      bin.install "lazykubectl"
+    test: |
+      system "#{bin}/lazykubectl version"
+
+archives:
+- replacements:
+    darwin: mac
+    linux: linux
+    windows: windows
+    386: i386
+    amd64: x86_64
+
+checksum:
+  name_template: "checksums.txt"
+
+snapshot:
+  name_template: "{{ .Tag }}-next"
+
+changelog:
+  filters:
+    exclude:
+    - "^docs:"
+    - "^test:"

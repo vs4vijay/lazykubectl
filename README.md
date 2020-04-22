@@ -2,10 +2,22 @@
 
 ---
 
+## Screenshots
+
+![LazyKubectl Pods](_screenshots/lazykubectl_pods.png)
+
+![LazyKubectl Containers](_screenshots/lazykubectl_containers.png)
+
+![LazyKubectl Logs](_screenshots/lazykubectl_logs.png)
+
+
+---
+
 ## References
 - https://pkg.go.dev/k8s.io/client-go/kubernetes?tab=doc
 - https://kubernetes.io/docs/reference/generated/kubernetes-api/v1.10/
 
+---
 
 ## ToDo
 - [x] Auth
@@ -55,11 +67,8 @@ clientConfig := clientcmd.NewNonInteractiveDeferredLoadingClientConfig(
 		&clientcmd.ClientConfigLoadingRules{ExplicitPath: kubeconfig},
 		&clientcmd.ConfigOverrides{CurrentContext: kubeContext})
 
-	rawConfig, err := clientConfig.RawConfig()
+rawConfig, err := clientConfig.RawConfig()
 rawConfig.CurrentContext
-
-
-
 
 
 
@@ -78,97 +87,84 @@ time.Sleep(5 * time.Second)
 
 
     
-    watch, _ := api.Services("").Watch(metav1.ListOptions{})
-    for event := range watch.ResultChan() {
-        fmt.Printf("Type: %v\n", event.Type)
-        p, ok := event.Object.(*v1.Pod)
-        if !ok {
-            fmt.Errorf("unexpected type")
-        }
-        fmt.Println(p.Status.ContainerStatuses)
-        fmt.Println(p.Status.Phase)
+watch, _ := api.Services("").Watch(metav1.ListOptions{})
+for event := range watch.ResultChan() {
+    fmt.Printf("Type: %v\n", event.Type)
+    p, ok := event.Object.(*v1.Pod)
+    if !ok {
+        fmt.Errorf("unexpected type")
     }
+    fmt.Println(p.Status.ContainerStatuses)
+    fmt.Println(p.Status.Phase)
+}
 
 
 watchlist := cache.NewListWatchFromClient(clientset.Core().RESTClient(), "pods", v1.NamespaceDefault, 
        fields.Everything())
-    _, controller := cache.NewInformer(
-        watchlist,
-        &v1.Pod{},
-        time.Second * 0,
-        cache.ResourceEventHandlerFuncs{
-            AddFunc: func(obj interface{}) {
-                fmt.Printf("add: %s \n", obj)
-            },
-            DeleteFunc: func(obj interface{}) {
-                fmt.Printf("delete: %s \n", obj)
-            },
-            UpdateFunc:func(oldObj, newObj interface{}) {
-                fmt.Printf("old: %s, new: %s \n", oldObj, newObj)
-            },
+_, controller := cache.NewInformer(
+    watchlist,
+    &v1.Pod{},
+    time.Second * 0,
+    cache.ResourceEventHandlerFuncs{
+        AddFunc: func(obj interface{}) {
+            fmt.Printf("add: %s \n", obj)
         },
-    )
-    stop := make(chan struct{})
-    go controller.Run(stop)
+        DeleteFunc: func(obj interface{}) {
+            fmt.Printf("delete: %s \n", obj)
+        },
+        UpdateFunc:func(oldObj, newObj interface{}) {
+            fmt.Printf("old: %s, new: %s \n", oldObj, newObj)
+        },
+    },
+)
+stop := make(chan struct{})
+go controller.Run(stop)
 
 
 informer := cache.NewSharedIndexInformer(
-			&cache.ListWatch{
-				ListFunc: func(options meta_v1.ListOptions) (runtime.Object, error) {
-					return kubeClient.CoreV1().Pods(conf.Namespace).List(options)
-				},
-				WatchFunc: func(options meta_v1.ListOptions) (watch.Interface, error) {
-					return kubeClient.CoreV1().Pods(conf.Namespace).Watch(options)
-				},
-			},
-			&api_v1.Pod{},
-			0, //Skip resync
-			cache.Indexers{},
-		)
+        &cache.ListWatch{
+            ListFunc: func(options meta_v1.ListOptions) (runtime.Object, error) {
+                return kubeClient.CoreV1().Pods(conf.Namespace).List(options)
+            },
+            WatchFunc: func(options meta_v1.ListOptions) (watch.Interface, error) {
+                return kubeClient.CoreV1().Pods(conf.Namespace).Watch(options)
+            },
+        },
+        &api_v1.Pod{},
+        0, //Skip resync
+        cache.Indexers{},
+    )
 
 
+e.HTTPErrorHandler = func(err error, c echo.Context) {
+    // Take required information from error and context and send it to a service like New Relic
+    fmt.Println(c.Path(), c.QueryParams(), err.Error())
+
+    switch err.(type) {
+    case orchestrator.CustomError:
+        fmt.Println("custom")
+    default:
+        fmt.Println("normal") // here v has type interface{}
+    }
+
+    // Call the default handler to return the HTTP response
+    e.DefaultHTTPErrorHandler(err, c)
+}
 
 
-	deploymentsClient := clientset.ExtensionsV1beta1().Deployments("namespace-ffledgling")
-
-	// List existing deployments in namespace
-	deployments, err := deploymentsClient.List(metav1.ListOptions{})
-
-
-	e.HTTPErrorHandler = func(err error, c echo.Context) {
-		// Take required information from error and context and send it to a service like New Relic
-		fmt.Println(c.Path(), c.QueryParams(), err.Error())
-
-		switch err.(type) {
-		case orchestrator.CustomError:
-			fmt.Println("custom")
-		default:
-			fmt.Println("normal") // here v has type interface{}
-		}
-
-		// Call the default handler to return the HTTP response
-		e.DefaultHTTPErrorHandler(err, c)
-	}
-
-    https://github.com/alitari/kubexp
-
-    https://github.com/JulienBreux/pody
-
-
-
-	if v, err := g.SetView("help", maxX-25, 0, maxX-1, 9); err != nil {
-		if err != gocui.ErrUnknownView {
-			return err
-		}
-		fmt.Fprintln(v, "KEYBINDINGS")
-		fmt.Fprintln(v, "Space: New View")
-		fmt.Fprintln(v, "Tab: Next View")
-		fmt.Fprintln(v, "← ↑ → ↓: Move View")
-		fmt.Fprintln(v, "Backspace: Delete View")
-		fmt.Fprintln(v, "t: Set view on top")
-		fmt.Fprintln(v, "b: Set view on bottom")
-		fmt.Fprintln(v, "^C: Exit")
-	}
+if v, err := g.SetView("help", maxX-25, 0, maxX-1, 9); err != nil {
+    if err != gocui.ErrUnknownView {
+        return err
+    }
+    fmt.Fprintln(v, "KEYBINDINGS")
+    fmt.Fprintln(v, "Space: New View")
+    fmt.Fprintln(v, "Tab: Next View")
+    fmt.Fprintln(v, "← ↑ → ↓: Move View")
+    fmt.Fprintln(v, "Backspace: Delete View")
+    fmt.Fprintln(v, "t: Set view on top")
+    fmt.Fprintln(v, "b: Set view on bottom")
+    fmt.Fprintln(v, "^C: Exit")
+}
 
 
 func Loader() string {
@@ -178,6 +174,10 @@ func Loader() string {
 	index := nanos / 50000000 % int64(len(characters))
 	return characters[index : index+1]
 }
+
+https://github.com/alitari/kubexp
+
+https://github.com/JulienBreux/pody
 
 https://stackoverflow.com/questions/40975307/how-to-watch-events-on-a-kubernetes-service-using-its-go-client
 
@@ -196,6 +196,5 @@ NewSharedIndexInformer
 
 https://raw.githubusercontent.com/kubernetes/kubernetes/master/hack/testdata/recursive/pod/pod/busybox.yaml
 https://raw.githubusercontent.com/istio/istio/master/samples/sleep/sleep.yaml
-
 
 ```
