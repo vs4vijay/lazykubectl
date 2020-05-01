@@ -1,0 +1,16 @@
+name: Sync Repo to SourceHut
+
+on: push
+
+jobs:
+  repo-sync:
+    runs-on: ubuntu-latest
+    steps:
+    - name: repo-sync
+      uses: wei/git-sync@v2
+      with:
+        source_repo: "git@github.com:vs4vijay/lazykubectl.git"
+        source_branch: "refs/remotes/source/*"
+        destination_repo: "git@git.sr.ht:~vs4vijay/lazykubectl"
+        destination_branch: "refs/heads/*"
+        ssh_private_key: ${{ secrets.SOURCEHUT_SSH_KEY }}
