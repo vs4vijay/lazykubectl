@@ -1,16 +1,27 @@
 name: Sync Repo to SourceHut
 
-on: push
+on: [push, delete]
 
 jobs:
-  repo-sync:
-    runs-on: ubuntu-latest
-    steps:
-    - name: repo-sync
-      uses: wei/git-sync@v2
+#   repo-sync:
+#     runs-on: ubuntu-latest
+#     steps:
+#     - name: repo-sync
+#       uses: wei/git-sync@v2
+#       with:
+#         source_repo: "git@github.com:vs4vijay/lazykubectl.git"
+#         source_branch: "refs/remotes/source/*"
+#         destination_repo: "git@git.sr.ht:~vs4vijay/lazykubectl"
+#         destination_branch: "refs/heads/*"
+#         ssh_private_key: ${{ secrets.SOURCEHUT_SSH_KEY }}
+  to-sourcehut:
+    runs-on: ubuntu-18.04
+    steps:                                              
+    - uses: actions/checkout@v1
+    - uses: pixta-dev/repository-mirroring-action@v1
       with:
-        source_repo: "git@github.com:vs4vijay/lazykubectl.git"
-        source_branch: "refs/remotes/source/*"
-        destination_repo: "git@git.sr.ht:~vs4vijay/lazykubectl"
-        destination_branch: "refs/heads/*"
-        ssh_private_key: ${{ secrets.SOURCEHUT_SSH_KEY }}
+        target_repo_url:
+          git@git.sr.ht:~vs4vijay/lazykubectl
+        ssh_private_key:                                
+          ${{ secrets.SOURCEHUT_SSH_KEY }}
+
