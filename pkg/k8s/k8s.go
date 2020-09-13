@@ -256,9 +256,9 @@ func (kubeapi *KubeAPI) DryRun() {
 		fmt.Println("\t", namespace.GetName())
 	}
 
-	// Secrets
+	// Data
 	secrets, _ := kubeapi.GetSecrets()
-	fmt.Println("Secrets: ")
+	fmt.Println("Data: ")
 	for _, secret := range secrets {
 		fmt.Println("\t", secret.GetName(), secret.StringData)
 	}

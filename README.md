@@ -68,6 +68,10 @@ lazykubectl
 - Handle Up / Down Arrow
 - Stream Logs
 - Events
+- CPU
+- MEM
+- View Logs
+- Execute Shell
 
 ---
 
@@ -80,8 +84,27 @@ lazykubectl
 ### Development Notes
 
 ```go
-    
-Docker:
+
+
+// Echo Error Handler
+
+e.HTTPErrorHandler = func(err error, c echo.Context) {
+    // Take required information from error and context and send it to a service like New Relic
+    fmt.Println(c.Path(), c.QueryParams(), err.Error())
+
+    switch err.(type) {
+    case orchestrator.CustomError:
+        fmt.Println("custom")
+    default:
+        fmt.Println("normal") // here v has type interface{}
+    }
+
+    // Call the default handler to return the HTTP response
+    e.DefaultHTTPErrorHandler(err, c)
+}
+
+
+// Docker 
 
 import (
     "github.com/docker/docker/client"
@@ -100,7 +123,7 @@ result, err := c.Client.VolumeList(context.Background(), filters.Args{})
 
 
 
-Kubernetes:
+// Kubernetes
 
 import (
     "k8s.io/client-go/kubernetes"
@@ -115,6 +138,9 @@ rawConfig, err := clientConfig.RawConfig()
 rawConfig.CurrentContext
 
 
+// Watcher
+
+watch, _ := api.Services("").Watch(metav1.ListOptions{})
 
 go func() {
     for event := range watch.ResultChan() {
@@ -127,24 +153,34 @@ go func() {
         fmt.Println(p.Status.Phase)
     }
 }()
+
 time.Sleep(5 * time.Second)
 
 
-    
-watch, _ := api.Services("").Watch(metav1.ListOptions{})
-for event := range watch.ResultChan() {
-    fmt.Printf("Type: %v\n", event.Type)
-    p, ok := event.Object.(*v1.Pod)
-    if !ok {
-        fmt.Errorf("unexpected type")
-    }
-    fmt.Println(p.Status.ContainerStatuses)
-    fmt.Println(p.Status.Phase)
-}
+// Controller
 
+https://engineering.bitnami.com/articles/a-deep-dive-into-kubernetes-controllers.html
+https://engineering.bitnami.com/articles/kubewatch-an-example-of-kubernetes-custom-controller.html
 
-watchlist := cache.NewListWatchFromClient(clientset.Core().RESTClient(), "pods", v1.NamespaceDefault, 
-       fields.Everything())
+cache.NewInformer
+NewSharedIndexInformer
+---
+lw := cache.NewListWatchFromClient()
+sharedInformer := cache.NewSharedInformer(lw, &api.Pod{}, resyncPeriod)
+---
+factory := informers.NewSharedInformerFactory(clientset, 0)
+informer := factory.Core().V1().Nodes().Informer()
+stopper := make(chan struct{})
+defer close(stopper)
+defer runtime.HandleCrash()
+informer.AddEventHandler(cache.ResourceEventHandlerFuncs{
+    AddFunc: onAdd,
+})
+go informer.Run(stopper)
+
+// Informer
+
+watchlist := cache.NewListWatchFromClient(clientset.Core().RESTClient(), "pods", "", fields.Everything())
 _, controller := cache.NewInformer(
     watchlist,
     &v1.Pod{},
@@ -165,6 +201,8 @@ stop := make(chan struct{})
 go controller.Run(stop)
 
 
+// Shared Index Informer
+
 informer := cache.NewSharedIndexInformer(
         &cache.ListWatch{
             ListFunc: func(options meta_v1.ListOptions) (runtime.Object, error) {
@@ -179,21 +217,6 @@ informer := cache.NewSharedIndexInformer(
         cache.Indexers{},
     )
 
-
-e.HTTPErrorHandler = func(err error, c echo.Context) {
-    // Take required information from error and context and send it to a service like New Relic
-    fmt.Println(c.Path(), c.QueryParams(), err.Error())
-
-    switch err.(type) {
-    case orchestrator.CustomError:
-        fmt.Println("custom")
-    default:
-        fmt.Println("normal") // here v has type interface{}
-    }
-
-    // Call the default handler to return the HTTP response
-    e.DefaultHTTPErrorHandler(err, c)
-}
 
 
 if v, err := g.SetView("help", maxX-25, 0, maxX-1, 9); err != nil {
@@ -219,6 +242,7 @@ func Loader() string {
 	return characters[index : index+1]
 }
 
+
 https://github.com/alitari/kubexp
 
 https://github.com/JulienBreux/pody
@@ -226,28 +250,22 @@ https://github.com/JulienBreux/pody
 https://stackoverflow.com/questions/40975307/how-to-watch-events-on-a-kubernetes-service-using-its-go-client
 
 https://github.com/NetApp/trident/blob/master/k8s_client/k8s_client.go
+https://github.com/vladimirvivien/k8s-client-examples
+https://github.com/dtan4/k8stail/blob/master/tail.go
 
-cache.NewInformer
-NewSharedIndexInformer
 
-
-    CPU
-    MEM
-    View Logs
-    Execute Shell
-    Events
-
+Test Data:
 
 https://raw.githubusercontent.com/kubernetes/kubernetes/master/hack/testdata/recursive/pod/pod/busybox.yaml
 https://raw.githubusercontent.com/istio/istio/master/samples/sleep/sleep.yaml
 
 
-kubectl create clusterrolebinding dashboard-admin-sa 
---clusterrole=cluster-admin --serviceaccount=default:dashboard-admin-sa
-
+kubectl create clusterrolebinding dashboard-admin-sa --clusterrole=cluster-admin --serviceaccount=default:dashboard-admin-sa
 
 kubectl describe secret dashboard-admin-sa-token-kw7vn
 
 kubectl get secret $(kubectl get serviceaccount dashboard -o jsonpath="{.secrets[0].name}") -o jsonpath="{.data.token}" | base64 --decode
+
+curl -fsSL https://raw.githubusercontent.com/micro/micro/master/scripts/install.sh | /bin/bash
 
 ```

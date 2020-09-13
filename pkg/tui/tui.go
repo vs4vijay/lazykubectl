@@ -13,7 +13,7 @@ import (
 var (
 	ViewInfo       = "Info"
 	ViewNamespaces = "Namespaces"
-	ViewServices = "Services"
+	ViewServices   = "Services"
 	ViewMain       = "Main"
 	ViewLogs       = "Logs"
 )
@@ -306,7 +306,7 @@ func renderData(viewName string, data string, clear bool, title string) {
 		if title != "" {
 			view.Title = title
 		}
- 		fmt.Fprintf(view, data)
+		fmt.Fprintf(view, data)
 		return nil
 	})
 }
