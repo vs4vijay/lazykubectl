@@ -130,12 +130,63 @@ import (
     "k8s.io/client-go/tools/clientcmd"
 )
 
+// Various Configs
+config    clientcmd.ClientConfig
+restConfig *rest.Config
+
+// Clients
+clientset  *kubernetes.Clientset
+dynamicClient 
+
+// Client Config
+config, err = clientcmd.NewClientConfigFromBytes([]byte(manifest))
+
+// Rest Config
+restConfig, err = clientcmd.RESTConfigFromKubeConfig([]byte(manifest))
+// OR
+restConfig, err := config.ClientConfig()
+
+// Client
+clientset, err := kubernetes.NewForConfig(restConfig)
+
+// Dynamic Client
+dynamicClient, err := dynamic.NewForConfig(restConfig)
+
+
+
+// Default Way
 clientConfig := clientcmd.NewNonInteractiveDeferredLoadingClientConfig(
 		&clientcmd.ClientConfigLoadingRules{ExplicitPath: kubeconfig},
 		&clientcmd.ConfigOverrides{CurrentContext: kubeContext})
 
 rawConfig, err := clientConfig.RawConfig()
 rawConfig.CurrentContext
+
+// List Resources
+clientset.CoreV1().Nodes().List(metav1.ListOptions{})
+clientset.CoreV1().Pods(namespace).List(metav1.ListOptions{})
+
+// Create Resources
+clientset.CoreV1().Namespaces().Create(ns)
+
+// Parse Manifest YAML
+obj, gvk, err := scheme.Codecs.UniversalDeserializer().Decode([]byte(manifest), nil, nil)
+
+
+// Create Resources (Generic Method) - Using Dynamic Client and Unstructrued
+
+groupResources, err := restmapper.GetAPIGroupResources(clientset.Discovery())
+rm := restmapper.NewDiscoveryRESTMapper(groupResources)
+
+unstructuredMap, err := runtime.DefaultUnstructuredConverter.ToUnstructured(obj)
+unstructuredObj := &unstructured.Unstructured{Object: unstructuredMap}
+
+gvk := obj.GetObjectKind().GroupVersionKind()
+gk := schema.GroupKind{Group: gvk.Group, Kind: gvk.Kind}
+
+mapping, err := rm.RESTMapping(gk, gvk.Version)
+createdUnstructuredObj, err := dynamicClient.Resource(mapping.Resource).Create(unstructuredObj, metav1.CreateOptions{})
+
 
 
 // Watcher
