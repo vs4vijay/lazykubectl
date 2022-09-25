@@ -1,6 +1,6 @@
 module github.com/vs4vijay/lazykubectl
 
-go 1.14
+go 1.19
 
 require (
 	github.com/jroimartin/gocui v0.4.0
