@@ -15,7 +15,7 @@ jobs:
 #         destination_branch: "refs/heads/*"
 #         ssh_private_key: ${{ secrets.SOURCEHUT_SSH_KEY }}
   to-sourcehut:
-    runs-on: ubuntu-18.04
+    runs-on: ubuntu-22.04
     steps:                                              
     - uses: actions/checkout@v2
     - uses: pixta-dev/repository-mirroring-action@v1
